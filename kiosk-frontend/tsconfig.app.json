@@ -1,0 +1,44 @@
+{
+  "compilerOptions": {
+    "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.app.tsbuildinfo",
+    "target": "ES2022",
+    "useDefineForClassFields": true,
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "skipLibCheck": true,
+    "typeRoots": ["./node_modules/@types", "./src/types"],
+
+    /* Bundler mode */
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "verbatimModuleSyntax": true,
+    "moduleDetection": "force",
+    "noEmit": true,
+    "jsx": "react-jsx",
+
+    /* Linting */
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "erasableSyntaxOnly": true,
+    "noFallthroughCasesInSwitch": true,
+    "noUncheckedSideEffectImports": true,
+    "paths": {
+      "transport/Transport": ["./src/shared/transport/impl/socket.ts"],
+      "apollo/apolloClient": ["./src/shared/api/apolloClient.ts"],
+      "effects/useKioskSystemNotificationEffect": [
+        "./src/app/providers/effects/useKioskSystemNotificationEffect.ts"
+      ],
+      "@/*": ["./src/*"],
+      "@": ["./src"]
+    }
+  },
+  "include": ["src"],
+  "exclude": [
+    "src/shared/audio/test-setup.ts",
+    "src/shared/testing/viteEnv-setup.ts",
+    "**/*.spec.ts",
+    "**/*.test.ts",
+    "**/__tests__/**"
+  ]
+}

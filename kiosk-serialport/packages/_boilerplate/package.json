@@ -1,0 +1,23 @@
+{
+  "name": "_boilerplate",
+  "main": "dist/index.js",
+  "type": "commonjs",
+  "private": true,
+  "scripts": {
+    "start": "npm run start:dev",
+    "start:dev": "cross-env NODE_ENV=development vite-node --watch ./index.ts",
+    "start:prod": "cross-env NODE_ENV=production vite-node --watch ./index.ts",
+    "build": "npm run build:prod",
+    "build:prod": "cross-env NODE_ENV=production bun esbuild.config.mjs",
+    "build:dev": "cross-env NODE_ENV=development bun esbuild.config.mjs",
+    "build:watch": "cross-env NODE_ENV=development bun esbuild.config.mjs --watch"
+  },
+  "exports": "./dist/index.js",
+  "devDependencies": {
+    "@types/bun": "latest"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  },
+  "version": "0.0.1-0"
+}

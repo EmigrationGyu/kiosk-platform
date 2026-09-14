@@ -1,0 +1,57 @@
+{
+  "name": "kiosk-electron",
+  "productName": "Kiosk",
+  "version": "1.31.0",
+  "description": "키오스크 단말 셸 — 백엔드·프론트·장치 서브프로세스를 묶어 패키징한다",
+  "main": ".vite/build/main.js",
+  "scripts": {
+    "start": "npm run start:dev",
+    "start:dev": "cross-env NODE_ENV=development electron-forge start",
+    "start:prod": "cross-env NODE_ENV=production electron-forge start",
+    "package": "npm run package:prod",
+    "package:dev": "cross-env NODE_ENV=development rm -rf out/ && electron-forge package",
+    "package:prod": "cross-env NODE_ENV=production rm -rf out/ && electron-forge package",
+    "make": "npm run make:prod",
+    "make:dev": "cross-env NODE_ENV=development rm -rf out/ && electron-forge make",
+    "make:prod": "cross-env NODE_ENV=production rm -rf out/ && electron-forge make",
+    "publish": "npm run publish:prod",
+    "publish:dev": "cross-env NODE_ENV=development electron-forge publish",
+    "publish:prod": "cross-env NODE_ENV=production electron-forge publish",
+    "lint": "eslint --ext .ts,.tsx .",
+    "test": "bun test",
+    "typecheck": "tsc --noEmit"
+  },
+  "keywords": [],
+  "author": {
+    "name": "minkyu-lee",
+    "email": "noreply@example.invalid"
+  },
+  "license": "MIT",
+  "devDependencies": {
+    "@electron-forge/cli": "^7.11.1",
+    "@electron-forge/maker-deb": "^7.11.1",
+    "@electron-forge/maker-rpm": "^7.11.1",
+    "@electron-forge/maker-squirrel": "^7.11.1",
+    "@electron-forge/maker-zip": "^7.11.1",
+    "@electron-forge/plugin-auto-unpack-natives": "^7.11.1",
+    "@electron-forge/plugin-fuses": "^7.11.1",
+    "@electron-forge/plugin-vite": "^7.11.1",
+    "@electron/fuses": "^1.8.0",
+    "@types/bun": "^1.4.0",
+    "@types/electron-squirrel-startup": "^1.0.2",
+    "@typescript-eslint/eslint-plugin": "^5.62.0",
+    "@typescript-eslint/parser": "^5.62.0",
+    "cross-env": "^10.0.0",
+    "electron": "^41.5.2",
+    "eslint": "^8.57.1",
+    "eslint-plugin-import": "^2.32.0",
+    "typescript": "^6.0.3",
+    "vite": "^5.4.20"
+  },
+  "dependencies": {
+    "electron-squirrel-startup": "^1.0.1",
+    "koffi": "^2.14.1",
+    "serialport": "^13.0.0",
+    "zod": "4.3.6"
+  }
+}

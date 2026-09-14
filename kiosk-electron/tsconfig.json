@@ -1,0 +1,20 @@
+{
+  "compilerOptions": {
+    "target": "ESNext",
+    "module": "preserve",
+    "allowJs": true,
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "noImplicitAny": true,
+    "sourceMap": true,
+    "moduleResolution": "bundler",
+    "resolveJsonModule": true,
+    // TS6 에서 @types 자동 포함이 bun-types 를 안 잡아 명시한다 (bun:test 사용).
+    "types": ["node", "bun"],
+    "noEmit": true,
+    "paths": {
+      "kiosk-types/*": ["../kiosk-types/*"]
+    }
+  },
+  "include": ["src/**/*"]
+}

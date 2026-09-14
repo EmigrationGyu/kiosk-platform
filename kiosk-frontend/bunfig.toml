@@ -1,0 +1,5 @@
+[test]
+preload = [
+  "./src/shared/testing/viteEnv-setup.ts",
+  "./src/shared/audio/test-setup.ts",
+]

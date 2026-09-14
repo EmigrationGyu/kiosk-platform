@@ -1,0 +1,7 @@
+# 저장소 표준은 LF. 이게 없으면 Windows 체크아웃이 CRLF 로 바뀌면서
+# 한 줄만 고쳐도 파일 전체가 diff 로 보여 리뷰가 불가능해진다.
+* text=auto eol=lf
+*.png binary
+*.jpg binary
+*.ico binary
+*.woff2 binary

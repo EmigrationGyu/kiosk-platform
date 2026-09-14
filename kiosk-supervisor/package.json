@@ -1,0 +1,26 @@
+{
+  "name": "kiosk-supervisor",
+  "version": "0.0.1",
+  "module": "src/loader.ts",
+  "type": "module",
+  "private": true,
+  "dependencies": {
+    "zod": "^4.3.6"
+  },
+  "scripts": {
+    "build:bootstrap": "bun build src/bootstrap.ts --target=bun --outfile=dist/bootstrap.js",
+    "build:loader": "bun build src/loader.ts --target=bun --outfile=dist/loader.js --minify",
+    "build:daemon": "bun build src/daemon/index.ts --target=bun --outfile=dist/daemon.js --minify",
+    "build": "bun run build:bootstrap && bun run build:loader && bun run build:daemon",
+    "package": "bun scripts/package.ts",
+    "dev:daemon": "bun --watch src/daemon/index.ts",
+    "test": "bun test",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.3.14"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  }
+}

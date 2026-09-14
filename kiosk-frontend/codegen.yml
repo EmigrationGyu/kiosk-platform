@@ -1,0 +1,53 @@
+overwrite: true
+# schema: 'https://api.example.invalid/graphql/'
+# 서버 schema + 클라이언트 로컬 schema(*.local-schema.graphql) 를 합쳐 로드한다.
+# 로컬 schema 는 @client 디렉티브로 마킹된 필드의 SDL 정의를 담는다.
+schema:
+  - 'https://development.example.invalid/graphql'
+  - 'src/**/*.local-schema.graphql'
+# 권장 설정: TS/TSX와 .graphql 둘 다 스캔
+documents:
+  - 'src/**/*.{ts,tsx}'
+  - 'src/**/*.graphql'
+  - '!src/shared/types/gql.ts'
+  # 로컬 schema 파일은 schema 로만 쓰이고 documents 에서는 제외한다.
+  - '!src/**/*.local-schema.graphql'
+ignoreNoDocuments: true
+generates:
+  # 스키마 타입의 단일 출처. client preset(./src/gql/) 도 함께 냈었지만 같은 스키마의
+  # ground truth 가 둘이 되어(enum vs 문자열 유니온) 소비처가 둘을 봉합하고 있었다.
+  # React Apollo 훅 생성
+  ./src/shared/types/gql.ts:
+    plugins:
+      - add:
+          content: '// @ts-nocheck'
+      - typescript
+      - typescript-operations
+      - typescript-react-apollo
+    config:
+      withHooks: true
+      withComponent: false
+      withHOC: false
+      reactApolloVersion: 3
+      apolloReactHooksImportFrom: '@apollo/client/react'
+      apolloReactCommonImportFrom: '@apollo/client'
+      useTypeImports: true
+      avoidOptionals:
+        field: true
+        inputValue: false
+      defaultScalarType: unknown
+      scalars:
+        Date: string
+        DateTime: string
+        JSON: unknown
+        JSONObject: unknown
+        Upload: File | Blob
+        BigInt: string
+        Decimal: number
+# 생성 직후 포맷을 맞춘다. 없으면 codegen 출력이 biome 과 어긋난 채 남고,
+# `code-gen:check` 의 `git diff --exit-code` 가 포맷된 커밋본과 충돌해 CI 가 깨진다.
+hooks:
+  afterAllFileWrite:
+    # codegen 은 훅을 cmd.exe 로 내보낸다. PATH 가 길면 뒤쪽 항목이 탐색에서 잘려
+    # bunx 가 안 잡힌다(실측: PATH 3596자, .bun/bin 이 2778자 지점 → not recognized).
+    - node node_modules/@biomejs/biome/bin/biome check --write

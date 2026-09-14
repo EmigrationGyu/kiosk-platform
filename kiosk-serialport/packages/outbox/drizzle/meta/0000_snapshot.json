@@ -1,0 +1,251 @@
+{
+  "version": "6",
+  "dialect": "sqlite",
+  "id": "86295e90-6e4e-44a8-84fa-1eefb6a8ad68",
+  "prevId": "00000000-0000-0000-0000-000000000000",
+  "tables": {
+    "outbox_dependency": {
+      "name": "outbox_dependency",
+      "columns": {
+        "parent_id": {
+          "name": "parent_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "child_id": {
+          "name": "child_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "idx_outbox_dep_child": {
+          "name": "idx_outbox_dep_child",
+          "columns": [
+            "child_id"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "outbox_dependency_parent_id_outbox_mutation_id_fk": {
+          "name": "outbox_dependency_parent_id_outbox_mutation_id_fk",
+          "tableFrom": "outbox_dependency",
+          "tableTo": "outbox_mutation",
+          "columnsFrom": [
+            "parent_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "outbox_dependency_child_id_outbox_mutation_id_fk": {
+          "name": "outbox_dependency_child_id_outbox_mutation_id_fk",
+          "tableFrom": "outbox_dependency",
+          "tableTo": "outbox_mutation",
+          "columnsFrom": [
+            "child_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "outbox_dependency_parent_id_child_id_pk": {
+          "columns": [
+            "parent_id",
+            "child_id"
+          ],
+          "name": "outbox_dependency_parent_id_child_id_pk"
+        }
+      },
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "chk_outbox_dep_no_self": {
+          "name": "chk_outbox_dep_no_self",
+          "value": "\"outbox_dependency\".\"parent_id\" != \"outbox_dependency\".\"child_id\""
+        }
+      }
+    },
+    "outbox_mutation": {
+      "name": "outbox_mutation",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "type": {
+          "name": "type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "payload": {
+          "name": "payload",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "attempts": {
+          "name": "attempts",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
+        },
+        "last_error": {
+          "name": "last_error",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "next_attempt_at": {
+          "name": "next_attempt_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "pending_deps_count": {
+          "name": "pending_deps_count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
+        },
+        "on_dep_fail": {
+          "name": "on_dep_fail",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'CANCEL'"
+        },
+        "root_id": {
+          "name": "root_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "resolution_reason": {
+          "name": "resolution_reason",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "initial_backoff_ms": {
+          "name": "initial_backoff_ms",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 60000
+        },
+        "max_backoff_ms": {
+          "name": "max_backoff_ms",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 480000
+        },
+        "expires_at": {
+          "name": "expires_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "idx_outbox_picker": {
+          "name": "idx_outbox_picker",
+          "columns": [
+            "status",
+            "pending_deps_count",
+            "next_attempt_at"
+          ],
+          "isUnique": false
+        },
+        "idx_outbox_root": {
+          "name": "idx_outbox_root",
+          "columns": [
+            "root_id"
+          ],
+          "isUnique": false
+        },
+        "idx_outbox_expiry": {
+          "name": "idx_outbox_expiry",
+          "columns": [
+            "status",
+            "expires_at"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "chk_outbox_attempts_nonneg": {
+          "name": "chk_outbox_attempts_nonneg",
+          "value": "\"outbox_mutation\".\"attempts\" >= 0"
+        },
+        "chk_outbox_pending_deps_nonneg": {
+          "name": "chk_outbox_pending_deps_nonneg",
+          "value": "\"outbox_mutation\".\"pending_deps_count\" >= 0"
+        }
+      }
+    }
+  },
+  "views": {},
+  "enums": {},
+  "_meta": {
+    "schemas": {},
+    "tables": {},
+    "columns": {}
+  },
+  "internal": {
+    "indexes": {}
+  }
+}

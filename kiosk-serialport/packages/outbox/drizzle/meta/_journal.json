@@ -1,0 +1,27 @@
+{
+  "version": "7",
+  "dialect": "sqlite",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "6",
+      "when": 1788157990682,
+      "tag": "0000_whole_ted_forrester",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1788169256658,
+      "tag": "0001_dashing_loners",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1788169731458,
+      "tag": "0002_gray_mandarin",
+      "breakpoints": true
+    }
+  ]
+}

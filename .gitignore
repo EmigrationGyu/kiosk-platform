@@ -1,0 +1,20 @@
+node_modules
+
+dist-ime/
+dist-runtime/
+dist-devices/
+
+# 하네스의 S3 대역 저장소 (로컬 빌드 산출물)
+.artifact-store/
+
+# 업데이트 콘솔 빌드 산출물
+update-console/dist/
+
+# 빌드 산출물 (원본 레포가 워킹트리에 들고 있던 것들 — 포폴엔 불포함)
+dist/
+dist-node/
+out/
+target/
+serialport-modules/
+rime-vendor/
+.bundle

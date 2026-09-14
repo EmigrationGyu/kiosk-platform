@@ -1,0 +1,46 @@
+{
+  "name": "kiosk-backend",
+  "module": "index.ts",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "start": "npm run start:dev",
+    "start:dev": "cross-env NODE_ENV=development vite-node --watch ./index.ts",
+    "start:prod": "cross-env NODE_ENV=production vite-node --watch ./index.ts",
+    "build": "bun run build:prod",
+    "build:prod": "cross-env NODE_ENV=production bun esbuild.config.mjs",
+    "build:dev": "cross-env NODE_ENV=development bun esbuild.config.mjs",
+    "build:node": "cross-env NODE_ENV=production bun esbuild.config.mjs --node",
+    "build:watch": "cross-env NODE_ENV=development bun esbuild.config.mjs --watch",
+    "typecheck": "tsc --noEmit",
+    "test": "bun test"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.4.10",
+    "@types/bun": "latest",
+    "@types/node": "~25.6.0",
+    "esbuild": "^0.25.10",
+    "esbuild-plugin-alias": "^0.2.1",
+    "fast-check": "^4.9.0",
+    "keytar": "^7.9.0",
+    "serialport": "^13.0.0",
+    "socket.io": "^4.8.1",
+    "typescript": "~5.8.3",
+    "vite": "^7.1.7",
+    "vite-node": "^3.2.3"
+  },
+  "dependencies": {
+    "@iarna/toml": "^2.2.5",
+    "cross-env": "^10.0.0",
+    "dotenv": "^16.5.0",
+    "express-ipc": "^1.1.0",
+    "iconv-lite": "^0.7.2",
+    "ofetch": "^1.5.1",
+    "pino": "^10.1.0",
+    "rxjs": "^7.8.2",
+    "kiosk-types": "workspace:*",
+    "zod": "^4.1.11",
+    "zod-validation-error": "^4.0.2"
+  },
+  "version": "0.34.0-1"
+}

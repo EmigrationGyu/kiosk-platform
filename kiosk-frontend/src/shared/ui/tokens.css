@@ -1,0 +1,83 @@
+/**
+ * 색 토큰 — 원본 사설 디자인시스템의 CSS 변수를 같은 이름으로 다시 정의한 것.
+ * 이름을 맞춘 이유는 소비처 클래스(`bg-background-*`)를 한 줄도 고치지 않기 위해서다.
+ * 타이포(`--v-font-size-*` · `typo-*`)는 원래부터 이 레포가 들고 있어 여기 없다.
+ */
+:root {
+  --v-background-base-normal: #ffffff;
+  --v-background-base-subtle: #fafafa;
+  --v-background-base-elevate: #f2f3f5;
+  --v-background-base-focus: #e4e6ea;
+  --v-background-base-blur: #f7f8f9;
+  --v-background-gray-elevate: #e9ebee;
+  --v-background-accent-normal: #3182f6;
+  --v-background-accent-elevate: #e8f1fd;
+  --v-background-accent-focus: #1b64da;
+  --v-background-danger-normal: #f04452;
+  --v-background-success-normal: #14ae5c;
+
+  --v-glyph-gray-display: #11161c;
+  --v-glyph-gray-heading: #1f242c;
+  --v-glyph-gray-body: #3c424b;
+  --v-glyph-gray-description: #6b7684;
+  --v-glyph-gray-caption: #8b95a1;
+  --v-glyph-accent-heading: #1b64da;
+  --v-glyph-white-display: #ffffff;
+  --v-glyph-red-heading: #e02d3c;
+
+  --v-line-outline-stroke: #e4e6ea;
+  --v-effect-dim-modal: rgb(0 0 0 / 40%);
+  --v-invert-glyph-gray-display: #ffffff;
+
+  --color-effect-shadow-modal: rgb(0 0 0 / 12%);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --v-background-base-normal: #16181d;
+    --v-background-base-subtle: #1b1e24;
+    --v-background-base-elevate: #23262d;
+    --v-background-base-focus: #2e323a;
+    --v-background-base-blur: #1f2228;
+    --v-background-gray-elevate: #2a2e36;
+    --v-background-accent-normal: #4593fc;
+    --v-background-accent-elevate: #1d2a3d;
+    --v-background-accent-focus: #76aefc;
+    --v-background-danger-normal: #f66570;
+    --v-background-success-normal: #24c97a;
+
+    --v-glyph-gray-display: #f7f8f9;
+    --v-glyph-gray-heading: #e5e8eb;
+    --v-glyph-gray-body: #c9cdd2;
+    --v-glyph-gray-description: #8b95a1;
+    --v-glyph-gray-caption: #6b7684;
+    --v-glyph-accent-heading: #76aefc;
+    --v-glyph-white-display: #ffffff;
+    --v-glyph-red-heading: #f66570;
+
+    --v-line-outline-stroke: #2e323a;
+    --v-effect-dim-modal: rgb(0 0 0 / 60%);
+    --v-invert-glyph-gray-display: #11161c;
+
+    --color-effect-shadow-modal: rgb(0 0 0 / 48%);
+  }
+}
+
+/**
+ * Pressable 기본 chrome. 유틸리티 클래스로 두면 소비처가 얹는 색 클래스와 특이도가 같아
+ * 출력 순서가 승자를 정한다 — 여기(유틸리티보다 먼저 로드되는 자리)에 두면 색이 항상 이긴다.
+ */
+[data-pressable="true"] {
+  appearance: none;
+  background-color: transparent;
+  border: 0;
+  padding: 0;
+  margin: 0;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  /* 위치를 잡아야 형제 absolute 배경판(언어 목록의 backdrop 등) 위에 그려진다 —
+     static 이면 그 배경판이 위로 올라와 포인터를 전부 삼킨다(언어 선택이 죽었던 원인). */
+  position: relative;
+}

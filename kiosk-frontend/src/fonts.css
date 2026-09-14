@@ -1,0 +1,49 @@
+/* Pretendard JP — 실제 쓰는 weight 의 woff2 만 싣는다.
+ * 패키지의 통짜 CSS 는 9 weight × (woff2+woff) = 42MB 를 끌어오는데, woff 는 Chromium 이
+ * 항상 woff2 를 먼저 고르므로 로드되지 않고, 100/200/300/900 은 코드에 참조가 없다.
+ * 800 은 index.css 의 .typo-s*-eb 용으로 보존(현재는 purge 되지만 선언된 타이포 클래스). */
+
+@font-face {
+  font-family: "Pretendard JP";
+  font-style: normal;
+  font-display: swap;
+  font-weight: 400;
+  src: url("pretendard-jp/dist/web/static/woff2/PretendardJP-Regular.woff2")
+    format("woff2");
+}
+
+@font-face {
+  font-family: "Pretendard JP";
+  font-style: normal;
+  font-display: swap;
+  font-weight: 500;
+  src: url("pretendard-jp/dist/web/static/woff2/PretendardJP-Medium.woff2")
+    format("woff2");
+}
+
+@font-face {
+  font-family: "Pretendard JP";
+  font-style: normal;
+  font-display: swap;
+  font-weight: 600;
+  src: url("pretendard-jp/dist/web/static/woff2/PretendardJP-SemiBold.woff2")
+    format("woff2");
+}
+
+@font-face {
+  font-family: "Pretendard JP";
+  font-style: normal;
+  font-display: swap;
+  font-weight: 700;
+  src: url("pretendard-jp/dist/web/static/woff2/PretendardJP-Bold.woff2")
+    format("woff2");
+}
+
+@font-face {
+  font-family: "Pretendard JP";
+  font-style: normal;
+  font-display: swap;
+  font-weight: 800;
+  src: url("pretendard-jp/dist/web/static/woff2/PretendardJP-ExtraBold.woff2")
+    format("woff2");
+}

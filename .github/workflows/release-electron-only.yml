@@ -1,0 +1,367 @@
+name: Release (Electron only, from S3 latest)
+
+on:
+  workflow_dispatch:
+    inputs:
+      description:
+        description: '변경 요약(선택) — 콘솔에서 운영자가 읽습니다. 비우면 "설명 없음"으로 남습니다'
+        required: false
+        type: string
+
+permissions:
+  contents: write
+  id-token: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  # 브랜치 판정과 채널 결정의 단일 지점 — release-full.yml 의 같은 잡과 매핑이 일치해야
+  # 한다(두 워크플로우가 같은 environment 를 집는다). 채널 규약은 README 의 CI/CD 절 참고.
+  guard-branch:
+    name: Guard release branch
+    runs-on: ubuntu-latest
+    outputs:
+      channel: ${{ steps.resolve.outputs.channel }}
+    steps:
+      - name: Resolve release channel
+        id: resolve
+        run: |
+          case "${GITHUB_REF_NAME}" in
+            master)  echo "channel=staging"     >> "$GITHUB_OUTPUT" ;;
+            develop) echo "channel=development" >> "$GITHUB_OUTPUT" ;;
+            *)
+              echo "::error::Release workflow must be dispatched on master or develop (got: ${GITHUB_REF_NAME})"
+              exit 1
+              ;;
+          esac
+          echo "Branch OK: ${GITHUB_REF_NAME}"
+        shell: bash
+
+  build-electron:
+    name: Build electron (S3 latest)
+    needs: guard-branch
+    runs-on: windows-latest
+    environment: ${{ needs.guard-branch.outputs.channel }}
+    # 설치본 서술자를 굽는 데 필요하다 — 키오스크가 받아올 곳과 같은 값이어야 한다.
+    env:
+      ARTIFACT_BASE_URL: https://${{ vars.KIOSK_APP_BUCKET_NAME }}.s3.ap-northeast-2.amazonaws.com
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Configure git (identity + PAT for submodule repos)
+        run: |
+          git config --global user.name  "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          for repo in kiosk-types kiosk-backend kiosk-frontend kiosk-serialport kiosk-electron; do
+            git config --global url."https://x-access-token:${PAT}@github.com/example/${repo}".insteadOf "https://github.com/example/${repo}"
+          done
+        shell: bash
+        env:
+          PAT: ${{ secrets.SUBMODULE_PAT }}
+
+      - name: Initialize electron + types submodules
+        # electron 의 spawnChildProcesses.ts 가 ../../../kiosk-types 소스를 import 한다
+        # (pipe 경로 단일 출처). processes.ts 는 의존성 0이라 types install 은 불필요 — 소스만 있으면 된다.
+        run: git submodule update --init -- kiosk-electron kiosk-types
+        shell: bash
+
+      - name: Update submodules to target branch
+        run: |
+          set -e
+          BRANCH="${GITHUB_REF_NAME}"
+          for sub in kiosk-electron kiosk-types; do
+            git -C "$sub" fetch origin
+            git -C "$sub" checkout -B "$BRANCH" "origin/$BRANCH"
+          done
+        shell: bash
+
+      # types 는 소스로 직접 컴파일·번들되지만, **그 소스가 쓰는 의존성(zod)** 은 있어야 한다.
+      # TS·vite 는 import 하는 파일 기준으로 해소하므로 형제인 electron 의 node_modules 는
+      # 보지 않는다 — types 자기 자리에 있어야 한다(실측: 없으면 TS2307 로 멈춘다).
+      - name: Types install (bun, hide monorepo root so it's not treated as workspace)
+        working-directory: kiosk-types
+        run: |
+          set -e
+          mv ../package.json ../package.json.bak
+          trap 'mv ../package.json.bak ../package.json' EXIT
+          # types/bun.lock 은 단독 설치용 락이다(루트 워크스페이스 락과 별개). 이 경로는
+          # 릴리스 산출물을 굽는 자리라 핀 없이 재해석시키지 않는다 — 락이 낡으면 여기서
+          # 멈추는 게 맞다. 고치는 법: 루트 숨긴 채 types 에서 `bun install` 후 커밋.
+          bun install --frozen-lockfile
+        shell: bash
+
+      - name: Electron install (bun, hide monorepo root so it's not treated as workspace)
+        working-directory: kiosk-electron
+        run: |
+          set -e
+          mv ../package.json ../package.json.bak
+          trap 'mv ../package.json.bak ../package.json' EXIT
+          bun install --frozen-lockfile
+        shell: bash
+
+      # ---------------- Typecheck + tests (gate: .exe 를 굽기 전에 중단) ----------------
+      # electron 은 워크스페이스 밖이라 다른 패키지들과 같은 게이트에 낄 수 없다 — 그 잡에서는
+      # electron 의 의존성이 설치되지 않는다. 그래서 자기 의존성이 갖춰진 이 지점에서 돈다.
+      # types 는 상대경로 별칭으로 소스에서 바로 해소되므로 별도 **빌드**는 필요 없다.
+      # 다만 그 소스가 쓰는 의존성은 위 스텝에서 types 자기 자리에 깔아둬야 한다.
+      #
+      # lint 는 넣지 않는다 — package.json 의 eslint 스크립트는 설정 파일 없는 잔재다(biome 전용).
+      - name: Typecheck & test electron
+        working-directory: kiosk-electron
+        run: |
+          set -e
+          bun run typecheck
+          bun test
+        shell: bash
+        timeout-minutes: 10
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          role-session-name: kiosk-electron-build-session
+          aws-region: ap-northeast-2
+
+      - name: Find latest versions from S3 and download
+        working-directory: kiosk-electron
+        run: |
+          set -e
+          set -o pipefail
+
+          BUCKET="${{ vars.KIOSK_APP_BUCKET_NAME }}"
+          BRANCH_NAME="${GITHUB_REF_NAME}"
+
+          # aws 실패를 목록에 섞지 않는다 — 2>&1 로 합치면 에러 문구가 "버전 목록"으로 둔갑해
+          # (awk 가 단어 하나를 뽑아냄) 빈 값 검사를 통과하고, 결국 "No suitable version found"
+          # 라는 엉뚱한 진단으로 끝난다. 실패는 실패로 보고한다.
+          find_latest_version() {
+            local pkg_name="$1"
+            local is_prerelease="$2"
+            local raw
+            if ! raw=$(aws s3 ls "s3://$BUCKET/$pkg_name/" 2>&1); then
+              echo "ERROR: aws s3 ls failed (자격증명/권한 문제이거나 prefix 자체가 없음) — bucket=$BUCKET prefix=$pkg_name" >&2
+              echo "$raw" >&2
+              exit 1
+            fi
+            local versions
+            versions=$(printf '%s\n' "$raw" | awk '{print $2}' | tr -d '\r' | sed 's#/##g')
+            if [ -z "$versions" ]; then
+              echo "ERROR: No versions found for $pkg_name (bucket=$BUCKET)" >&2
+              exit 1
+            fi
+            local latest=""
+            if [ "$is_prerelease" = "true" ]; then
+              latest=$(echo "$versions" | grep -E '^[0-9]+\.[0-9]+\.[0-9]+-[0-9]+$' | sort -V | tail -1)
+            else
+              latest=$(echo "$versions" | grep -E '^[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -1)
+            fi
+            if [ -z "$latest" ]; then
+              echo "ERROR: No suitable version found for $pkg_name" >&2
+              echo "  mode: $([ "$is_prerelease" = "true" ] && echo prerelease || echo stable)" >&2
+              echo "  available: $(echo "$versions" | tr '\n' ' ')" >&2
+              exit 1
+            fi
+            echo "  → $latest" >&2
+            echo "$latest"
+          }
+
+          IS_PRERELEASE="false"
+          if [ "$BRANCH_NAME" != "master" ]; then
+            IS_PRERELEASE="true"
+          fi
+
+          BACKEND_VERSION=$(find_latest_version "kiosk-backend" "$IS_PRERELEASE")
+          FRONTEND_VERSION=$(find_latest_version "kiosk-frontend" "$IS_PRERELEASE")
+          # serialport 목록은 계약의 단일 출처에서 얻는다 — 이 잡에 serialport 레포는 없지만
+          # types 는 항상 체크아웃되어 있다.
+          SP_LIST="$GITHUB_WORKSPACE/serialport-list.txt"
+          bun "$GITHUB_WORKSPACE/scripts/ci/serialport-processes.ts" > "$SP_LIST"
+          : > "$GITHUB_WORKSPACE/serialport-selected.txt"
+          while read -r pkg; do
+            ver=$(find_latest_version "$pkg" "$IS_PRERELEASE")
+            echo "$pkg $ver" >> "$GITHUB_WORKSPACE/serialport-selected.txt"
+          done < "$SP_LIST"
+
+          mkdir -p target/backend target/frontend
+          while read -r pkg; do mkdir -p "target/serialport/$pkg"; done < "$SP_LIST"
+
+          download_package() {
+            local pkg_name="$1"; local version="$2"; local target_dir="$3"
+            echo "Downloading $pkg_name v$version..."
+            if ! aws s3 sync "s3://$BUCKET/$pkg_name/$version/" "$target_dir/" --quiet; then
+              echo "ERROR: Failed to download $pkg_name" >&2
+              exit 1
+            fi
+            local fc
+            fc=$(find "$target_dir" -type f | wc -l)
+            [ "$fc" -eq 0 ] && { echo "ERROR: No files for $pkg_name" >&2; exit 1; }
+            # 놓은 사본이 무슨 버전인지 적어둔다 — dist 는 자기 버전을 안 들고 다니고
+            # 동봉본에는 세대처럼 버전을 뜻하는 디렉토리 이름도 없다. 키오스크가 "지금
+            # 뭐가 도는지" 보고할 때 이 값을 읽는다(로컬 취합도 같은 파일을 남긴다).
+            printf '{"version": "%s"}' "$version" > "$target_dir/version.json"
+            echo "  ✓ $fc files"
+          }
+
+          download_package "kiosk-backend"     "$BACKEND_VERSION"            "target/backend"
+          download_package "kiosk-frontend" "$FRONTEND_VERSION"           "target/frontend"
+          while read -r pkg ver; do
+            download_package "$pkg" "$ver" "target/serialport/$pkg"
+          done < "$GITHUB_WORKSPACE/serialport-selected.txt"
+        shell: bash
+
+      - name: Verify and fix target contents structure
+        working-directory: kiosk-electron
+        run: |
+          set -e
+          fix_directory_structure() {
+            local target_dir="$1"
+            local file_count dir_count subdir
+            file_count=$(find "$target_dir" -maxdepth 1 -type f | wc -l)
+            dir_count=$(find "$target_dir" -maxdepth 1 -mindepth 1 -type d | wc -l)
+            if [ "$file_count" -eq 0 ] && [ "$dir_count" -eq 1 ]; then
+              subdir=$(find "$target_dir" -maxdepth 1 -mindepth 1 -type d | head -1)
+              mv "$subdir"/* "$target_dir/" 2>/dev/null || true
+              mv "$subdir"/.[!.]* "$target_dir/" 2>/dev/null || true
+              rmdir "$subdir" 2>/dev/null || true
+            fi
+          }
+          fix_directory_structure "target/backend"
+          fix_directory_structure "target/frontend"
+          while read -r pkg; do
+            fix_directory_structure "target/serialport/$pkg"
+          done < "$GITHUB_WORKSPACE/serialport-list.txt"
+
+          [ -f "target/frontend/index.html" ] || { echo "ERROR: frontend/index.html missing" >&2; exit 1; }
+
+          # 이름과 내용을 모두 확인한다 — "비어있지 않음"은 엉뚱한 산출물이 실려도 통과한다.
+          #
+          # index.js: 소비처(componentSegments)가 가리키는 고정 이름. 엔트리 파일명이 바뀌면
+          #   esbuild 산출물 이름도 따라 바뀌어, 옛 파일이 남아있으면 **빌드는 성공하는데 옛
+          #   코드가 실행되는** 형태로 새어나간다(실측).
+          # parentPort: 백엔드가 electron 메인의 자식으로 도는 번들인지의 표식. 이게 없으면
+          #   메인이 자식으로 띄운 프로세스가 부모와 말할 방법이 없어 부팅부터 실패한다.
+          [ -f "target/backend/index.js" ]             || { echo "ERROR: target/backend/index.js 없음 (소비처가 기대하는 고정 이름)" >&2; exit 1; }
+          grep -q "parentPort" "target/backend/index.js"             || { echo "ERROR: 백엔드 번들이 자식 프로세스용이 아니다 (parentPort 없음)" >&2; exit 1; }
+
+          # 렌더러가 백엔드 직결 포트를 쓰는 번들인지 — 옛 ipcRenderer 번들이면 상대가 없다.
+          grep -rqs "kiosk:backend-port" target/frontend/assets             || { echo "ERROR: 프론트 번들이 백엔드 직결 포트를 쓰지 않는다" >&2; exit 1; }
+        shell: bash
+
+      - name: Bump electron version
+        id: bump_electron
+        working-directory: kiosk-electron
+        run: |
+          set -e
+          BRANCH="${GITHUB_REF_NAME}"
+          cat > bump.mjs <<'EOF'
+          import fs from 'fs';
+          const branch = process.env.BRANCH || 'master';
+          const raw = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+          const current = String(raw.version || '0.0.0');
+          const [core, pre = ''] = current.split('-');
+          const [maj, min, pat] = core.split('.').map(n => parseInt(n, 10) || 0);
+          function toVersion(m, n, p, prePart) {
+            const base = `${m}.${n}.${p}`;
+            return prePart ? `${base}-${prePart}` : base;
+          }
+          let next;
+          if (branch === 'master') {
+            next = toVersion(maj, min + 1, 0, '');
+          } else {
+            if (pre === '') {
+              next = toVersion(maj, min, pat, 'alpha.1');
+            } else {
+              const m = pre.match(/^([a-z]+)\.(\d+)$/);
+              next = m
+                ? toVersion(maj, min, pat, `${m[1]}.${parseInt(m[2], 10) + 1}`)
+                : toVersion(maj, min, pat, 'alpha.1');
+            }
+          }
+          raw.version = next;
+          fs.writeFileSync('package.json', JSON.stringify(raw, null, 2) + '\n');
+          console.log(raw.name);
+          console.log(next);
+          EOF
+          readarray -t INFO < <(BRANCH="$BRANCH" bun bump.mjs)
+          echo "pkg_name=${INFO[0]}" >> $GITHUB_OUTPUT
+          echo "version=${INFO[1]}"  >> $GITHUB_OUTPUT
+        shell: bash
+
+      - name: Build electron app (npm make)
+        working-directory: kiosk-electron
+        run: npm run make:prod
+        shell: bash
+
+      - name: Verify build outputs
+        working-directory: kiosk-electron
+        run: |
+          set -e
+          ls -la out/ | cat
+          ls -la out/make/ | cat || echo "No make output"
+        shell: bash
+
+      - name: Upload .exe artifacts to S3
+        working-directory: kiosk-electron
+        run: |
+          set -e
+          PKG_NAME="${{ steps.bump_electron.outputs.pkg_name }}"
+          PKG_VERSION="${{ steps.bump_electron.outputs.version }}"
+          EXE_FILES=$(find out/make/ -type f -name "*.exe")
+          if [ -z "$EXE_FILES" ]; then
+            echo "ERROR: No .exe files found in out/make/" >&2
+            find out/make/ -type f | head -20
+            exit 1
+          fi
+          for exe_file in $EXE_FILES; do
+            filename=$(basename "$exe_file")
+            echo "Uploading: $filename"
+            aws s3 cp "$exe_file" "s3://${{ vars.KIOSK_APP_BUCKET_NAME }}/$PKG_NAME/$PKG_VERSION/$filename"
+          done
+
+          # 원격 전체 업데이트가 받아갈 설치본 — 아카이브로 묶지 않는다(exe 한 개다).
+          # Setup.exe 만 대상으로 한다: 다른 exe 는 설치본이 아니다.
+          SETUP=$(find out/make/ -type f -name "*Setup.exe" | head -1)
+          if [ -n "$SETUP" ]; then
+            bun "$GITHUB_WORKSPACE/scripts/ci/bake-artifact.ts" --file "$SETUP" --out "${RUNNER_TEMP}/base" --prefix "$PKG_NAME" --component base --version "$PKG_VERSION" --base-url "${ARTIFACT_BASE_URL}" --description "${DESCRIPTION}"
+            aws s3 cp "${RUNNER_TEMP}/base/" "s3://${{ vars.KIOSK_APP_BUCKET_NAME }}/$PKG_NAME/$PKG_VERSION/" --recursive --exclude "*.exe"
+          else
+            echo "WARN: Setup.exe 가 없어 설치본 서술자를 굽지 않습니다" >&2
+          fi
+        shell: bash
+        env:
+          KIOSK_COMPONENT_SIGNING_KEY: ${{ secrets.KIOSK_COMPONENT_SIGNING_KEY }}
+          # 입력은 env 로만 건넨다 — run 안에 직접 보간하면 스크립트 주입이 된다.
+          DESCRIPTION: ${{ inputs.description }}
+
+      - name: Commit & push bump to electron repo
+        working-directory: kiosk-electron
+        run: |
+          set -e
+          BRANCH="${GITHUB_REF_NAME}"
+          PKG_NAME="${{ steps.bump_electron.outputs.pkg_name }}"
+          PKG_VERSION="${{ steps.bump_electron.outputs.version }}"
+
+          git add package.json
+          git commit -m "chore: bump version to ${PKG_VERSION} (${BRANCH}) [skip ci]" || echo "no changes"
+          git push origin "HEAD:${BRANCH}"
+
+          git tag -f "${PKG_NAME}@${PKG_VERSION}"
+          git push origin "refs/tags/${PKG_NAME}@${PKG_VERSION}" || true
+          if [ "$BRANCH" != "master" ]; then
+            git tag -f "${PKG_NAME}@alpha" || true
+            git push -f origin "refs/tags/${PKG_NAME}@alpha" || true
+          fi
+        shell: bash

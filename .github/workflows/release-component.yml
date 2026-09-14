@@ -1,0 +1,357 @@
+name: Release (Single Component)
+
+# ---------------------------------------------------------------------------
+# 컴포넌트 하나만 굽고 올린다 — 원격 부분 업데이트의 공급 측.
+#
+# 서브레포에 각자 파이프라인을 두는 방식은 성립하지 않는다: 모든 패키지가
+# kiosk-types 를 워크스페이스로 참조하고, 그 워크스페이스는 **최상위 셸 레포에서만**
+# 조립된다. 서브레포 단독 체크아웃에는 types 가 아예 없어 타입체크부터 불가능하다.
+# 그래서 컴포넌트별 파이프라인도 여기(루트)에 산다.
+#
+# release-full 과의 관계: 로직은 같고 범위만 다르다. full 은 전부를 한 잡에서 굽고,
+# 이쪽은 하나만 굽는다. 부분 업데이트는 "무엇이 언제 갈리는가"를 컴포넌트마다 따로
+# 정할 수 있어야 의미가 있으므로 두 입구가 모두 필요하다.
+# ---------------------------------------------------------------------------
+
+on:
+  workflow_dispatch:
+    inputs:
+      component:
+        description: '릴리스할 컴포넌트'
+        required: true
+        type: choice
+        options:
+          - backend
+          - frontend
+          - ime
+          - token-dispenser
+          # 이 목록만은 파생할 수 없다 — workflow_dispatch 의 choice 는 정적 YAML 이어야
+          # 한다. `bun gen bs` 가 여기에 새 디바이스를 주입한다(마커를 지우지 말 것).
+          # @gen:ci-component
+
+      description:
+        description: '변경 요약(선택) — 콘솔에서 운영자가 읽습니다. 비우면 "설명 없음"으로 남습니다'
+        required: false
+        type: string
+
+permissions:
+  contents: write
+  id-token: write
+  packages: read
+
+concurrency:
+  # 같은 컴포넌트의 동시 릴리스만 막는다 — 서로 다른 컴포넌트는 병렬로 나갈 수 있어야
+  # 부분 업데이트의 의미가 산다.
+  group: release-component-${{ inputs.component }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Release ${{ inputs.component }}
+    runs-on: ubuntu-latest
+    environment: ${{ github.ref_name == 'master' && 'staging' || 'development' }}
+    # 키오스크가 산출물을 받아올 곳. 백엔드 번들에 박히는 값과 서술자가 싣는 값이
+    # 같아야 하므로 잡 레벨에 한 번만 적는다(버킷은 전체 public read).
+    env:
+      ARTIFACT_BASE_URL: https://${{ vars.KIOSK_APP_BUCKET_NAME }}.s3.ap-northeast-2.amazonaws.com
+    steps:
+      - name: Resolve component layout
+        id: layout
+        run: |
+          set -e
+          case "${COMPONENT}" in
+            backend)
+              echo "repo=kiosk-backend"     >> "$GITHUB_OUTPUT"
+              echo "pkg_dir=kiosk-backend"  >> "$GITHUB_OUTPUT"
+              ;;
+            frontend)
+              echo "repo=kiosk-frontend"    >> "$GITHUB_OUTPUT"
+              echo "pkg_dir=kiosk-frontend" >> "$GITHUB_OUTPUT"
+              ;;
+            *)
+              # backend/frontend 외의 모든 컴포넌트는 serialport 서브프로세스다. 여기에 목록을
+              # 또 적지 않는다 — 이 스텝은 체크아웃 전이라 types 를 읽을 수 없고, 적어두면
+              # `bun gen bs` 가 넣은 choice 와 어긋나 새 디바이스가 "알 수 없는 컴포넌트"로
+              # 거절된다(실측). 등록 여부는 types 가 체크아웃된 뒤 아래
+              # "Verify component registration" 에서 SERIALPORT_PROCESS 로 판정한다.
+              echo "repo=kiosk-serialport"  >> "$GITHUB_OUTPUT"
+              echo "pkg_dir=kiosk-serialport/packages/${COMPONENT}" >> "$GITHUB_OUTPUT"
+              ;;
+          esac
+          case "${GITHUB_REF_NAME}" in
+            master|develop) ;;
+            *)
+              echo "::error::master 또는 develop 에서만 릴리스할 수 있습니다 (현재: ${GITHUB_REF_NAME})"
+              exit 1
+              ;;
+          esac
+        shell: bash
+        env:
+          COMPONENT: ${{ inputs.component }}
+
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Configure git (identity + PAT for submodule repos)
+        run: |
+          git config --global user.name  "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          for repo in kiosk-types kiosk-backend kiosk-frontend kiosk-serialport; do
+            git config --global url."https://x-access-token:${PAT}@github.com/example/${repo}".insteadOf "https://github.com/example/${repo}"
+          done
+        shell: bash
+        env:
+          PAT: ${{ secrets.SUBMODULE_PAT }}
+
+      # types 는 어느 컴포넌트를 굽든 필요하다 — 워크스페이스가 그것 없이는 해소되지 않는다.
+      - name: Initialize submodules (types + 대상 레포)
+        run: |
+          set -e
+          git -c protocol.version=2 submodule update --init --recursive --force -- \
+            kiosk-types "${TARGET_REPO}"
+          git submodule status
+        shell: bash
+        env:
+          TARGET_REPO: ${{ steps.layout.outputs.repo }}
+
+      - name: Checkout submodules to target branch
+        run: |
+          set -e
+          for sub in kiosk-types "${TARGET_REPO}"; do
+            echo "=== $sub → ${GITHUB_REF_NAME} ==="
+            ( cd "$sub" && git fetch origin && git checkout -B "${GITHUB_REF_NAME}" "origin/${GITHUB_REF_NAME}" )
+          done
+        shell: bash
+        env:
+          TARGET_REPO: ${{ steps.layout.outputs.repo }}
+
+      - name: Configure @example scope (GH Packages)
+        run: |
+          echo '[install.scopes]' > bunfig.toml
+          echo '"@example" = { token = "'${GITHUB_TOKEN}'", url = "https://npm.pkg.github.com" }' >> bunfig.toml
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Cache bun install (workspace)
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-workspace-${{ hashFiles('bun.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-bun-workspace-
+
+      - name: Install workspace deps (bun, root)
+        run: bun install --frozen-lockfile
+        shell: bash
+        timeout-minutes: 10
+
+      # choice 목록(정적 YAML)과 계약의 단일 출처가 어긋나면 여기서 멈춘다 — 레이아웃 스텝이
+      # 목록 없이 serialport 로 보낸 컴포넌트가 실제로 등록된 프로세스인지의 유일한 판정.
+      - name: Verify component registration (serialport only)
+        if: steps.layout.outputs.repo == 'kiosk-serialport'
+        run: |
+          set -e
+          if ! bun scripts/ci/serialport-processes.ts | grep -qx "${COMPONENT}"; then
+            echo "::error::'${COMPONENT}' 는 SERIALPORT_PROCESS 에 등록되지 않았다 — choice 목록과 kiosk-types 가 어긋났다"
+            exit 1
+          fi
+          if [ ! -f "${PKG_DIR}/package.json" ]; then
+            echo "::error::${PKG_DIR}/package.json 이 없다 — 계약에는 있지만 패키지가 없다"
+            exit 1
+          fi
+        shell: bash
+        env:
+          COMPONENT: ${{ inputs.component }}
+          PKG_DIR: ${{ steps.layout.outputs.pkg_dir }}
+
+      # ---------------- 게이트 ----------------
+      # types 를 항상 함께 검증한다 — 계약의 단일 진실 공급원이고, 여기가 깨지면 어떤
+      # 컴포넌트를 올려도 상대와 말이 통하지 않는다.
+      - name: Typecheck (types + 대상)
+        run: |
+          set -e
+          (cd kiosk-types && bun run typecheck)
+          if [ "${TARGET_REPO}" = "kiosk-frontend" ]; then
+            (cd kiosk-frontend && bun run typecheck:strict)
+          else
+            (cd "${TARGET_REPO}" && bun run typecheck)
+          fi
+        shell: bash
+        timeout-minutes: 10
+        env:
+          TARGET_REPO: ${{ steps.layout.outputs.repo }}
+
+      - name: Test (types + 대상)
+        run: |
+          set -e
+          (cd kiosk-types && bun test)
+          (cd "${TARGET_REPO}" && bun test)
+        shell: bash
+        timeout-minutes: 10
+        env:
+          TARGET_REPO: ${{ steps.layout.outputs.repo }}
+
+      # ---------------- 버전 ----------------
+      - name: Compute version
+        id: bump
+        working-directory: ${{ steps.layout.outputs.pkg_dir }}
+        run: |
+          set -e
+          cat > bump.mjs <<'MJS'
+          import fs from 'fs';
+          const branch = process.env.BRANCH_NAME || 'master';
+          const raw = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+          const current = String(raw.version || '0.0.0');
+          const [core, pre = ''] = current.split('-');
+          const [maj, min, pat] = core.split('.').map(n => parseInt(n, 10) || 0);
+          let next;
+          if (branch === 'master') {
+            next = `${maj}.${min + 1}.0`;
+          } else {
+            const preNum = pre === '' ? 0 : parseInt(pre, 10) || 0;
+            const nextPre = pre === '' ? 1 : preNum + 1;
+            next = `${maj}.${min}.${pat}-${nextPre}`;
+          }
+          raw.version = next;
+          fs.writeFileSync('package.json', JSON.stringify(raw, null, 2) + '\n');
+          console.log(raw.name);
+          console.log(next);
+          MJS
+          readarray -t INFO < <(BRANCH_NAME="${GITHUB_REF_NAME}" bun bump.mjs)
+          echo "pkg_name=${INFO[0]}" >> "$GITHUB_OUTPUT"
+          echo "version=${INFO[1]}"  >> "$GITHUB_OUTPUT"
+          rm -f bump.mjs
+        shell: bash
+
+      # ---------------- 빌드 ----------------
+      # 환경변수는 컴포넌트를 가리지 않고 전부 넘긴다 — 쓰지 않는 값은 무해하고, 분기를
+      # 두면 새 변수가 생길 때마다 두 곳을 고쳐야 한다.
+      - name: Build
+        working-directory: ${{ steps.layout.outputs.pkg_dir }}
+        run: bun run build
+        shell: bash
+        env:
+          MOBILE_ID_API_HOST: ${{ vars.MOBILE_ID_API_HOST }}
+          MOBILE_ID_SERVICE_CODE: ${{ vars.MOBILE_ID_SERVICE_CODE }}
+          AUDIO_CDN_BASE_URL: ${{ vars.AUDIO_CDN_BASE_URL }}
+          ARTIFACT_BASE_URL: ${{ env.ARTIFACT_BASE_URL }}
+          VITE_API_HOST: ${{ vars.VITE_API_HOST }}
+          VITE_TOLGEE_API_URL: ${{ vars.VITE_TOLGEE_API_URL }}
+          VITE_TOLGEE_API_KEY: ${{ secrets.VITE_TOLGEE_API_KEY }}
+          VITE_TOLGEE_CDN_PREFIX: ${{ vars.VITE_TOLGEE_CDN_PREFIX }}
+          VITE_SUBSCRIPTION_HOST: ${{ vars.VITE_SUBSCRIPTION_HOST }}
+          VITE_S3_ROOT_HOST: ${{ vars.VITE_S3_ROOT_HOST }}
+
+      # 산출물이 기대한 모양인지 확인한다 — "비어있지 않음"은 엉뚱한 결과도 통과시킨다.
+      - name: Verify artifact
+        working-directory: ${{ steps.layout.outputs.pkg_dir }}
+        run: |
+          set -e
+          [ -d dist ] || { echo "ERROR: dist 없음" >&2; exit 1; }
+          case "${COMPONENT}" in
+            backend)
+              [ -f dist/index.js ] || { echo "ERROR: dist/index.js 없음 (소비처가 기대하는 고정 이름)" >&2; exit 1; }
+              grep -q "parentPort" dist/index.js \
+                || { echo "ERROR: 백엔드 번들이 자식 프로세스용이 아니다 (parentPort 없음)" >&2; exit 1; }
+              ;;
+            frontend)
+              [ -f dist/index.html ] || { echo "ERROR: dist/index.html 없음" >&2; exit 1; }
+              grep -rqs "kiosk:backend-port" dist/assets \
+                || { echo "ERROR: 프론트 번들이 백엔드 직결 포트를 쓰지 않는다" >&2; exit 1; }
+              ;;
+            *)
+              [ -f dist/index.js ] || { echo "ERROR: dist/index.js 없음" >&2; exit 1; }
+              ;;
+          esac
+          echo "산출물 확인 완료: $(find dist -type f | wc -l) 개 파일"
+        shell: bash
+        env:
+          COMPONENT: ${{ inputs.component }}
+
+      # ---------------- 업로드 ----------------
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          role-session-name: kiosk-component-build-session
+          aws-region: ap-northeast-2
+
+      # 원격 부분 업데이트가 받아갈 산출물 — 아카이브·서명·서술자.
+      # 굽는 코드는 하네스와 공유한다: 두 벌이면 실기기에서 검증한 모양과 여기서
+      # 올리는 모양이 갈린다.
+      - name: Bake update artifact
+        run: |
+          set -e
+          # 빈 문자열이면 굽는 쪽이 키를 통째로 뺀다 — 여기서 분기하지 않는다.
+          bun scripts/ci/bake-artifact.ts --dist "${PKG_DIR}/dist" --out "${RUNNER_TEMP}/artifact" --prefix "${PKG_NAME}" --component "${COMPONENT}" --version "${PKG_VERSION}" --base-url "${ARTIFACT_BASE_URL}" --description "${DESCRIPTION}"
+        shell: bash
+        env:
+          COMPONENT: ${{ inputs.component }}
+          # 입력은 env 로만 건넨다 — run 안에 직접 보간하면 스크립트 주입이 된다.
+          DESCRIPTION: ${{ inputs.description }}
+          PKG_DIR: ${{ steps.layout.outputs.pkg_dir }}
+          PKG_NAME: ${{ steps.bump.outputs.pkg_name }}
+          PKG_VERSION: ${{ steps.bump.outputs.version }}
+          KIOSK_COMPONENT_SIGNING_KEY: ${{ secrets.KIOSK_COMPONENT_SIGNING_KEY }}
+
+      - name: Upload dist to S3
+        run: |
+          set -e
+          # 낱개 파일은 그대로 둔다 — electron 패키징이 이 경로를 내려받는다.
+          aws s3 sync "${PKG_DIR}/dist" "s3://${BUCKET}/${PKG_NAME}/${PKG_VERSION}/" --delete
+          # 구운 것은 그 옆에 얹는다(--delete 뒤라 sync 가 지우지 않는다).
+          aws s3 cp "${RUNNER_TEMP}/artifact/" "s3://${BUCKET}/${PKG_NAME}/${PKG_VERSION}/" --recursive
+          echo "업로드 완료: ${PKG_NAME}@${PKG_VERSION}"
+        shell: bash
+        env:
+          PKG_DIR: ${{ steps.layout.outputs.pkg_dir }}
+          BUCKET: ${{ vars.KIOSK_APP_BUCKET_NAME }}
+          PKG_NAME: ${{ steps.bump.outputs.pkg_name }}
+          PKG_VERSION: ${{ steps.bump.outputs.version }}
+
+      # ---------------- 버전 커밋 ----------------
+      # 업로드가 성공한 뒤에만 버전을 확정한다 — 반대 순서면 올라가지도 않은 버전이
+      # 히스토리에 남아 다음 릴리스가 그 번호를 건너뛴다.
+      - name: Commit & push bump
+        working-directory: ${{ steps.layout.outputs.repo }}
+        run: |
+          set -e
+          git add -A
+          git commit -m "chore(${COMPONENT}): bump version to ${PKG_VERSION} (${GITHUB_REF_NAME}) [skip ci]" || echo "no changes"
+          git push origin "HEAD:${GITHUB_REF_NAME}"
+          git tag -f "${PKG_NAME}@${PKG_VERSION}"
+          git push origin "refs/tags/${PKG_NAME}@${PKG_VERSION}" || true
+          if [ "${GITHUB_REF_NAME}" != "master" ]; then
+            git tag -f "${PKG_NAME}@alpha" || true
+            git push -f origin "refs/tags/${PKG_NAME}@alpha" || true
+          fi
+        shell: bash
+        env:
+          COMPONENT: ${{ inputs.component }}
+          PKG_NAME: ${{ steps.bump.outputs.pkg_name }}
+          PKG_VERSION: ${{ steps.bump.outputs.version }}
+
+      - name: Summary
+        run: |
+          {
+            echo "### ${COMPONENT} 릴리스 완료"
+            echo ""
+            echo "| | |"
+            echo "|---|---|"
+            echo "| 패키지 | ${PKG_NAME} |"
+            echo "| 버전 | ${PKG_VERSION} |"
+            echo "| 브랜치 | ${GITHUB_REF_NAME} |"
+            echo "| S3 | ${PKG_NAME}/${PKG_VERSION}/ |"
+          } >> "$GITHUB_STEP_SUMMARY"
+        shell: bash
+        env:
+          COMPONENT: ${{ inputs.component }}
+          PKG_NAME: ${{ steps.bump.outputs.pkg_name }}
+          PKG_VERSION: ${{ steps.bump.outputs.version }}

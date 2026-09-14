@@ -1,0 +1,19 @@
+{
+  "files": [],
+  "references": [
+    { "path": "./tsconfig.app.json" },
+    { "path": "./tsconfig.node.json" },
+    { "path": "./tsconfig.test.json" }
+  ],
+  "compilerOptions": {
+    "paths": {
+      "transport/Transport": ["./src/shared/transport/impl/socket.ts"],
+      "apollo/apolloClient": ["./src/shared/api/apolloClient.ts"],
+      "effects/useKioskSystemNotificationEffect": [
+        "./src/app/providers/effects/useKioskSystemNotificationEffect.ts"
+      ],
+      "@/*": ["./src/*"],
+      "@": ["./src"]
+    }
+  }
+}

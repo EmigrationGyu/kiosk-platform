@@ -1,0 +1,25 @@
+This project uses React Compiler for automatic optimization.
+
+DO NOT use the following:
+- useMemo
+- useCallback
+- React.memo
+
+React Compiler handles all memoization automatically.
+Write clean, simple code without manual performance optimizations.
+
+Tech Stack:
+- React + TypeScript
+- React Compiler
+- Bun (package manager & runtime)
+- Biome (linter/formatter)
+- Tolgee (i18n)
+
+Development Commands - ALWAYS use Bun:
+- Install: bun install (NOT npm/yarn/pnpm)
+- Dev: bun run dev
+- Build: bun run build
+- Test: bun test or bun run test
+- Scripts: bun run <script-name>
+
+DO NOT use npm, yarn, or pnpm commands.

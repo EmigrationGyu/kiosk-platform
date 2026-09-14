@@ -1,0 +1,79 @@
+name: Release Supervisor
+
+# bootstrap.js 는 동결 앵커라 배포하지 않음(USB). loader.js / daemon.js 만 빌드·서명·S3 업로드.
+# 버전은 S3 에 올라간 기존 버전에서 minor bump (git push 불필요 — 브랜치 보호 무관).
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write # AWS OIDC
+
+concurrency:
+  group: release-supervisor
+  cancel-in-progress: false
+
+jobs:
+  guard-branch:
+    name: Guard release branch (master only)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Reject non-master
+        run: |
+          if [ "${GITHUB_REF_NAME}" != "master" ]; then
+            echo "::error::Release must be dispatched on master (got: ${GITHUB_REF_NAME})"
+            exit 1
+          fi
+        shell: bash
+
+  release:
+    name: Build + sign + upload (loader, daemon)
+    needs: guard-branch
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install deps (bun)
+        run: bun install --frozen-lockfile
+        timeout-minutes: 5
+
+      - name: Typecheck (gate)
+        run: bun run typecheck
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          role-session-name: kiosk-supervisor-release
+          aws-region: ap-northeast-2
+
+      - name: Compute next version (S3 최신에서 minor bump)
+        id: bump
+        run: |
+          set -e
+          BUCKET="${{ vars.KIOSK_APP_BUCKET_NAME }}"
+          versions=$(aws s3 ls "s3://$BUCKET/kiosk-supervisor/daemon/" 2>/dev/null | awk '{print $2}' | sed 's#/##' || echo "")
+          # grep 은 매칭 0개(첫 릴리스)면 exit 1 → pipefail+set -e 가 죽이므로 || true 로 가드.
+          latest=$(echo "$versions" | grep -E '^[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -1 || true)
+          if [ -z "$latest" ]; then
+            next="0.1.0"
+          else
+            maj=$(echo "$latest" | cut -d. -f1); min=$(echo "$latest" | cut -d. -f2)
+            next="${maj}.$((min + 1)).0"
+          fi
+          echo "version=${next}" >> "$GITHUB_OUTPUT"
+          echo "Latest on S3: ${latest:-none} → next: ${next}"
+        shell: bash
+
+      - name: Build + sign + upload
+        run: bun scripts/release.ts
+        env:
+          SUPERVISOR_VERSION: ${{ steps.bump.outputs.version }}
+          SUPERVISOR_BUCKET: ${{ vars.KIOSK_APP_BUCKET_NAME }}
+          SUPERVISOR_SIGNING_KEY: ${{ secrets.SUPERVISOR_SIGNING_KEY }}
+          AWS_REGION: ap-northeast-2

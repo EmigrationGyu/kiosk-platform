@@ -1,0 +1,551 @@
+@import "./shared/ui/tokens.css";
+@import "./fonts.css";
+@import "swiper/css";
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html,
+body,
+#root {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  margin: 0;
+  padding: 0;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-user-drag: none;
+  -webkit-touch-callout: none;
+  touch-action: manipulation;
+}
+
+body {
+  min-width: 320px;
+  overscroll-behavior: none;
+  font-family:
+    "Pretendard JP", "Pretendard", -apple-system, BlinkMacSystemFont,
+    system-ui, Roboto, "Helvetica Neue", "Segoe UI", "Apple SD Gothic Neo",
+    "Noto Sans KR", "Malgun Gothic", "Apple Color Emoji", "Segoe UI Emoji",
+    "Segoe UI Symbol", sans-serif;
+}
+
+/* ===========================================
+   `.no-pressable-dim` — vds Pressable 의 dim 오버레이(::after) opt-in 제거.
+
+   vds Pressable 은 hover/press 시 ::after dim 오버레이를 띄운다
+   (`pressableVariants`: `active:after:opacity-100`, `[@media(hover:hover)]:hover:after:opacity-100`).
+   터치 키오스크에선 hover sticky / active 잔상으로 dim 이 거슬리는데, 상태(hover·active)나
+   환경(hover:hover 보고 여부)에 따라 어느 셀렉터가 켜질지 달라서 **상태 불문하고** 끈다.
+   전역으로 끄면 dim 이 유용한 곳까지 죽으므로 거슬리는 곳에만 수기로 붙인다.
+
+   - 요소 자신(예: Button) 또는 조상(예: SegmentControl 컨테이너)에 붙이면
+     하위 모든 [data-pressable] 까지 적용된다.
+   - 네이티브 터치 탭 하이라이트(또 다른 dim 원인)도 함께 끈다.
+   =========================================== */
+.no-pressable-dim[data-pressable="true"],
+.no-pressable-dim [data-pressable="true"] {
+  -webkit-tap-highlight-color: transparent;
+}
+.no-pressable-dim[data-pressable="true"]::after,
+.no-pressable-dim [data-pressable="true"]::after {
+  opacity: 0 !important;
+}
+
+/* ===========================================
+   전역 hover off — 키오스크는 터치 전용인데 prod 가 hover:hover 로 보고해서
+   vds Pressable 의 hover 분기(scale-[1.02] + dim ::after)가 phantom/sticky hover 로
+   살아난다. 탭 후 마지막 요소에 hover 가 고착되거나, 슬라이드가 고정된 손가락 밑을
+   지날 때 hover 가 깜빡여 어색하다.
+
+   hover 분기만 무력화하고 press(:active) 피드백은 보존한다.
+   `:not(:active)` 게이트로 손가락 누르는 동안엔 양보 → active:scale-[0.98] + press dim 유지,
+   손 뗀 뒤 고착된 hover scale/dim 만 제거한다.
+   =========================================== */
+@media (hover: hover) {
+  [data-pressable="true"]:hover:not(:active) {
+    transform: none !important;
+  }
+  [data-pressable="true"]:hover:not(:active)::after {
+    opacity: 0 !important;
+  }
+}
+
+:root {
+  --safe-top-kiosk: 32px;
+  --safe-bottom-kiosk: 52px;
+  --bottom-banner-height: 0px;
+  --component-navigation-bar-bar-height: 48px;
+  --color-effect-shadow-modal: rgba(0, 0, 0, 0.14);
+
+  /* override for vds heading font size */
+  /* TODO: remove this after vds update */
+  --v-font-size-heading-3: 15px;
+
+  /* ===========================================
+     Mask gradient stop presets (reusable)
+     - easing 자체를 지정할 수 없어서(stop 분포로 근사) 프리셋으로 관리
+     - "transparent → opaque" 방향 기준 (각도는 linear-gradient에 별도 지정)
+     =========================================== */
+  /* Figma easing-in-and-out 스톱 (alpha는 0→1 선형, 위치만 easing 분포) */
+  --mask-fade-stops-ease-in-out:
+    #00000000 0%,
+    #00000006 2.33%,
+    #00000016 8.72%,
+    #0000002f 18.26%,
+    #0000004d 30.05%,
+    #0000006e 43.2%,
+    #0000008f 56.8%,
+    #000000b0 69.95%,
+    #000000cf 81.74%,
+    #000000e8 91.28%,
+    #000000ff 97.67%,
+    #000000ff 100%;
+
+  --mask-fade-stops-ease-in-out-reverse:
+    #000000ff 0%,
+    #000000ff 2.33%,
+    #000000e8 8.72%,
+    #000000cf 18.26%,
+    #000000b0 30.05%,
+    #0000008f 43.2%,
+    #0000006e 56.8%,
+    #0000004d 69.95%,
+    #0000002f 81.74%,
+    #00000016 91.28%,
+    #00000006 97.67%,
+    #00000000 100%;
+}
+
+/* ===========================================
+   VDS Typography Utilities for Tailwind v3
+   Usage: typo-{size}-{weight}
+   - size: s1~s3, d1~d2, t1~t2, h1~h2, lb2, b1~b3, l1~l2, c1~c3
+   - weight: eb(800), b(700), sb(600), m(500), r(400)
+   =========================================== */
+
+@layer utilities {
+  /* Super */
+  .typo-s1-eb {
+    font-size: var(--v-font-size-super-1);
+    line-height: var(--v-line-height-super);
+    letter-spacing: var(--v-letter-spacing-super);
+    font-weight: 800;
+  }
+  .typo-s1-sb {
+    font-size: var(--v-font-size-super-1);
+    line-height: var(--v-line-height-super);
+    letter-spacing: var(--v-letter-spacing-super);
+    font-weight: 600;
+  }
+  .typo-s2-eb {
+    font-size: var(--v-font-size-super-2);
+    line-height: var(--v-line-height-super);
+    letter-spacing: var(--v-letter-spacing-super);
+    font-weight: 800;
+  }
+  .typo-s2-sb {
+    font-size: var(--v-font-size-super-2);
+    line-height: var(--v-line-height-super);
+    letter-spacing: var(--v-letter-spacing-super);
+    font-weight: 600;
+  }
+  .typo-s3-eb {
+    font-size: var(--v-font-size-super-3);
+    line-height: var(--v-line-height-super);
+    letter-spacing: var(--v-letter-spacing-super);
+    font-weight: 800;
+  }
+  .typo-s3-sb {
+    font-size: var(--v-font-size-super-3);
+    line-height: var(--v-line-height-super);
+    letter-spacing: var(--v-letter-spacing-super);
+    font-weight: 600;
+  }
+
+  /* Display */
+  .typo-d1-b {
+    font-size: var(--v-font-size-display-1);
+    line-height: var(--v-line-height-display);
+    letter-spacing: var(--v-letter-spacing-display);
+    font-weight: 700;
+  }
+  .typo-d1-m {
+    font-size: var(--v-font-size-display-1);
+    line-height: var(--v-line-height-display);
+    letter-spacing: var(--v-letter-spacing-display);
+    font-weight: 500;
+  }
+  .typo-d2-b {
+    font-size: var(--v-font-size-display-2);
+    line-height: var(--v-line-height-display);
+    letter-spacing: var(--v-letter-spacing-display);
+    font-weight: 700;
+  }
+  .typo-d2-m {
+    font-size: var(--v-font-size-display-2);
+    line-height: var(--v-line-height-display);
+    letter-spacing: var(--v-letter-spacing-display);
+    font-weight: 500;
+  }
+
+  /* Title */
+  .typo-t1-b {
+    font-size: var(--v-font-size-title-1);
+    line-height: var(--v-line-height-title);
+    letter-spacing: var(--v-letter-spacing-title);
+    font-weight: 700;
+  }
+  .typo-t1-sb {
+    font-size: var(--v-font-size-title-1);
+    line-height: var(--v-line-height-title);
+    letter-spacing: var(--v-letter-spacing-title);
+    font-weight: 600;
+  }
+  .typo-t1-m {
+    font-size: var(--v-font-size-title-1);
+    line-height: var(--v-line-height-title);
+    letter-spacing: var(--v-letter-spacing-title);
+    font-weight: 500;
+  }
+  .typo-t2-b {
+    font-size: var(--v-font-size-title-2);
+    line-height: var(--v-line-height-title);
+    letter-spacing: var(--v-letter-spacing-title);
+    font-weight: 700;
+  }
+  .typo-t2-sb {
+    font-size: var(--v-font-size-title-2);
+    line-height: var(--v-line-height-title);
+    letter-spacing: var(--v-letter-spacing-title);
+    font-weight: 600;
+  }
+  .typo-t2-m {
+    font-size: var(--v-font-size-title-2);
+    line-height: var(--v-line-height-title);
+    letter-spacing: var(--v-letter-spacing-title);
+    font-weight: 500;
+  }
+
+  /* Heading */
+  .typo-h1-b {
+    font-size: var(--v-font-size-heading-1);
+    line-height: var(--v-line-height-heading);
+    letter-spacing: var(--v-letter-spacing-heading);
+    font-weight: 700;
+  }
+  .typo-h1-sb {
+    font-size: var(--v-font-size-heading-1);
+    line-height: var(--v-line-height-heading);
+    letter-spacing: var(--v-letter-spacing-heading);
+    font-weight: 600;
+  }
+  .typo-h1-m {
+    font-size: var(--v-font-size-heading-1);
+    line-height: var(--v-line-height-heading);
+    letter-spacing: var(--v-letter-spacing-heading);
+    font-weight: 500;
+  }
+  .typo-h2-b {
+    font-size: var(--v-font-size-heading-2);
+    line-height: var(--v-line-height-heading);
+    letter-spacing: var(--v-letter-spacing-heading);
+    font-weight: 700;
+  }
+  .typo-h2-sb {
+    font-size: var(--v-font-size-heading-2);
+    line-height: var(--v-line-height-heading);
+    letter-spacing: var(--v-letter-spacing-heading);
+    font-weight: 600;
+  }
+  .typo-h2-m {
+    font-size: var(--v-font-size-heading-2);
+    line-height: var(--v-line-height-heading);
+    letter-spacing: var(--v-letter-spacing-heading);
+    font-weight: 500;
+  }
+  .typo-h3-b {
+    font-size: var(--v-font-size-heading-3);
+    line-height: var(--v-line-height-heading);
+    letter-spacing: var(--v-letter-spacing-heading);
+    font-weight: 700;
+  }
+  .typo-h3-sb {
+    font-size: var(--v-font-size-heading-3);
+    line-height: var(--v-line-height-heading);
+    letter-spacing: var(--v-letter-spacing-heading);
+    font-weight: 600;
+  }
+  .typo-h3-m {
+    font-size: var(--v-font-size-heading-3);
+    line-height: var(--v-line-height-heading);
+    letter-spacing: var(--v-letter-spacing-heading);
+    font-weight: 500;
+  }
+
+  /* Large Body — VDS 에는 있는데 여기 매핑이 빠져 있던 계열.
+     쓰이는 것만 채운다(나머지는 필요해질 때 같은 패턴으로 추가). */
+  .typo-lb1-sb {
+    font-size: var(--v-font-size-largebody-1);
+    line-height: var(--v-line-height-largebody);
+    letter-spacing: var(--v-letter-spacing-largebody);
+    font-weight: 600;
+  }
+  .typo-lb1-m {
+    font-size: var(--v-font-size-largebody-1);
+    line-height: var(--v-line-height-largebody);
+    letter-spacing: var(--v-letter-spacing-largebody);
+    font-weight: 500;
+  }
+  .typo-lb2-m {
+    font-size: var(--v-font-size-largebody-2);
+    line-height: var(--v-line-height-largebody);
+    letter-spacing: var(--v-letter-spacing-largebody);
+    font-weight: 500;
+  }
+
+  /* Body */
+  .typo-b1-sb {
+    font-size: var(--v-font-size-body-1);
+    line-height: var(--v-line-height-body);
+    letter-spacing: var(--v-letter-spacing-body);
+    font-weight: 600;
+  }
+  .typo-b1-m {
+    font-size: var(--v-font-size-body-1);
+    line-height: var(--v-line-height-body);
+    letter-spacing: var(--v-letter-spacing-body);
+    font-weight: 500;
+  }
+  .typo-b1-r {
+    font-size: var(--v-font-size-body-1);
+    line-height: var(--v-line-height-body);
+    letter-spacing: var(--v-letter-spacing-body);
+    font-weight: 400;
+  }
+  .typo-b2-sb {
+    font-size: var(--v-font-size-body-2);
+    line-height: var(--v-line-height-body);
+    letter-spacing: var(--v-letter-spacing-body);
+    font-weight: 600;
+  }
+  .typo-b2-m {
+    font-size: var(--v-font-size-body-2);
+    line-height: var(--v-line-height-body);
+    letter-spacing: var(--v-letter-spacing-body);
+    font-weight: 500;
+  }
+  .typo-b2-r {
+    font-size: var(--v-font-size-body-2);
+    line-height: var(--v-line-height-body);
+    letter-spacing: var(--v-letter-spacing-body);
+    font-weight: 400;
+  }
+  .typo-b3-sb {
+    font-size: var(--v-font-size-body-3);
+    line-height: var(--v-line-height-body);
+    letter-spacing: var(--v-letter-spacing-body);
+    font-weight: 600;
+  }
+  .typo-b3-m {
+    font-size: var(--v-font-size-body-3);
+    line-height: var(--v-line-height-body);
+    letter-spacing: var(--v-letter-spacing-body);
+    font-weight: 500;
+  }
+  .typo-b3-r {
+    font-size: var(--v-font-size-body-3);
+    line-height: var(--v-line-height-body);
+    letter-spacing: var(--v-letter-spacing-body);
+    font-weight: 400;
+  }
+
+  /* Label */
+  .typo-l1-sb {
+    font-size: var(--v-font-size-label-1);
+    line-height: var(--v-line-height-label);
+    letter-spacing: var(--v-letter-spacing-label);
+    font-weight: 600;
+  }
+  .typo-l1-m {
+    font-size: var(--v-font-size-label-1);
+    line-height: var(--v-line-height-label);
+    letter-spacing: var(--v-letter-spacing-label);
+    font-weight: 500;
+  }
+  .typo-l1-r {
+    font-size: var(--v-font-size-label-1);
+    line-height: var(--v-line-height-label);
+    letter-spacing: var(--v-letter-spacing-label);
+    font-weight: 400;
+  }
+  .typo-l2-sb {
+    font-size: var(--v-font-size-label-2);
+    line-height: var(--v-line-height-label);
+    letter-spacing: var(--v-letter-spacing-label);
+    font-weight: 600;
+  }
+  .typo-l2-m {
+    font-size: var(--v-font-size-label-2);
+    line-height: var(--v-line-height-label);
+    letter-spacing: var(--v-letter-spacing-label);
+    font-weight: 500;
+  }
+  .typo-l2-r {
+    font-size: var(--v-font-size-label-2);
+    line-height: var(--v-line-height-label);
+    letter-spacing: var(--v-letter-spacing-label);
+    font-weight: 400;
+  }
+
+  /* Code */
+  .typo-c1-sb {
+    font-size: var(--v-font-size-code-1);
+    line-height: var(--v-line-height-code);
+    letter-spacing: var(--v-letter-spacing-code);
+    font-weight: 600;
+    font-family: var(--v-font-family-mono);
+  }
+  .typo-c1-m {
+    font-size: var(--v-font-size-code-1);
+    line-height: var(--v-line-height-code);
+    letter-spacing: var(--v-letter-spacing-code);
+    font-weight: 500;
+    font-family: var(--v-font-family-mono);
+  }
+  .typo-c2-sb {
+    font-size: var(--v-font-size-code-2);
+    line-height: var(--v-line-height-code);
+    letter-spacing: var(--v-letter-spacing-code);
+    font-weight: 600;
+    font-family: var(--v-font-family-mono);
+  }
+  .typo-c2-m {
+    font-size: var(--v-font-size-code-2);
+    line-height: var(--v-line-height-code);
+    letter-spacing: var(--v-letter-spacing-code);
+    font-weight: 500;
+    font-family: var(--v-font-family-mono);
+  }
+  .typo-c3-sb {
+    font-size: var(--v-font-size-code-3);
+    line-height: var(--v-line-height-code);
+    letter-spacing: var(--v-letter-spacing-code);
+    font-weight: 600;
+    font-family: var(--v-font-family-mono);
+  }
+  .typo-c3-m {
+    font-size: var(--v-font-size-code-3);
+    line-height: var(--v-line-height-code);
+    letter-spacing: var(--v-letter-spacing-code);
+    font-weight: 500;
+    font-family: var(--v-font-family-mono);
+  }
+
+  /* ===========================================
+     Mask utilities
+     - "색상 틴트 없이" opacity만 페이드시키기 위한 마스크
+     =========================================== */
+  .mask-fade-ease-in-out-to-right {
+    /* 좌(transparent) → 우(opaque) */
+    -webkit-mask-image: linear-gradient(
+      90deg,
+      var(--mask-fade-stops-ease-in-out)
+    );
+    mask-image: linear-gradient(90deg, var(--mask-fade-stops-ease-in-out));
+    -webkit-mask-repeat: no-repeat;
+    mask-repeat: no-repeat;
+    -webkit-mask-size: 100% 100%;
+    mask-size: 100% 100%;
+    -webkit-mask-position: 0 0;
+    mask-position: 0 0;
+    mask-mode: alpha;
+  }
+
+  .mask-fade-ease-in-out-to-left {
+    /* 우(transparent) → 좌(opaque) */
+    -webkit-mask-image: linear-gradient(
+      270deg,
+      var(--mask-fade-stops-ease-in-out)
+    );
+    mask-image: linear-gradient(270deg, var(--mask-fade-stops-ease-in-out));
+    -webkit-mask-repeat: no-repeat;
+    mask-repeat: no-repeat;
+    -webkit-mask-size: 100% 100%;
+    mask-size: 100% 100%;
+    -webkit-mask-position: 0 0;
+    mask-position: 0 0;
+    mask-mode: alpha;
+  }
+
+  .mask-fade-ease-in-out-to-bottom {
+    /* 상(transparent) → 하(opaque) */
+    -webkit-mask-image: linear-gradient(
+      180deg,
+      var(--mask-fade-stops-ease-in-out)
+    );
+    mask-image: linear-gradient(180deg, var(--mask-fade-stops-ease-in-out));
+    -webkit-mask-repeat: no-repeat;
+    mask-repeat: no-repeat;
+    -webkit-mask-size: 100% 100%;
+    mask-size: 100% 100%;
+    -webkit-mask-position: 0 0;
+    mask-position: 0 0;
+    mask-mode: alpha;
+  }
+
+  .mask-fade-ease-in-out-to-top {
+    /* 하(transparent) → 상(opaque) */
+    -webkit-mask-image: linear-gradient(
+      0deg,
+      var(--mask-fade-stops-ease-in-out)
+    );
+    mask-image: linear-gradient(0deg, var(--mask-fade-stops-ease-in-out));
+    -webkit-mask-repeat: no-repeat;
+    mask-repeat: no-repeat;
+    -webkit-mask-size: 100% 100%;
+    mask-size: 100% 100%;
+    -webkit-mask-position: 0 0;
+    mask-position: 0 0;
+    mask-mode: alpha;
+  }
+
+  .mask-fade-ease-in-out-from-center {
+    /* 중앙(opaque) → 가장자리(transparent) */
+    -webkit-mask-image: radial-gradient(
+      circle farthest-side,
+      var(--mask-fade-stops-ease-in-out-reverse)
+    );
+    mask-image: radial-gradient(
+      circle farthest-side,
+      var(--mask-fade-stops-ease-in-out-reverse)
+    );
+    -webkit-mask-repeat: no-repeat;
+    mask-repeat: no-repeat;
+    -webkit-mask-size: 100% 100%;
+    mask-size: 100% 100%;
+    -webkit-mask-position: center center;
+    mask-position: center center;
+    mask-mode: alpha;
+  }
+
+  .mask-fade-ease-in-out-to-center {
+    /* 가장자리(opaque) → 중앙(transparent) */
+    -webkit-mask-image: radial-gradient(
+      circle farthest-side,
+      var(--mask-fade-stops-ease-in-out)
+    );
+    mask-image: radial-gradient(
+      circle farthest-side,
+      var(--mask-fade-stops-ease-in-out)
+    );
+    -webkit-mask-repeat: no-repeat;
+    mask-repeat: no-repeat;
+    -webkit-mask-size: 100% 100%;
+    mask-size: 100% 100%;
+    -webkit-mask-position: center center;
+    mask-position: center center;
+    mask-mode: alpha;
+  }
+}

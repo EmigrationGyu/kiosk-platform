@@ -1,0 +1,1375 @@
+/*
+ * 운영 도구의 스타일 — 세 열 워크벤치.
+ *
+ * 색이 뜻하는 것은 넷뿐이다: 파랑 = 내가 고른 것, 초록 = 성공, 빨강 = 실패,
+ * 그 외 회색조. 점선 테두리는 값이 아직 없는 자리(예: 미배정 티어 배지)를 뜻한다.
+ */
+:root {
+  color-scheme: dark;
+
+  --bg: #18181b;
+  --raised: #1f1f23;
+  --sunken: #101013;
+  --panel: #1a1a1e;
+  --line: #303034;
+  --line-soft: #232327;
+
+  --fg: #e4e4e7;
+  --muted: #a1a1aa;
+  --faint: #71717a;
+  --dim: #52525b;
+
+  --accent: #60a5fa;
+  --accent-bg: #1c2330;
+  --accent-line: #3b4a63;
+  --on-accent: #0b1220;
+
+  --ok: #4ade80;
+  --ok-line: #235c3a;
+  --bad: #f87171;
+  --bad-line: #6b2b2b;
+  --bad-bg: #241a1c;
+
+  font-family:
+    system-ui, -apple-system, "Segoe UI", "Malgun Gothic", sans-serif;
+  font-size: 13px;
+  color: var(--fg);
+  background: var(--bg);
+}
+
+/* 체크박스를 연달아 누르는 화면이라 드래그가 선택으로 새면 방해만 된다. */
+body {
+  margin: 0;
+  background: var(--bg);
+  user-select: none;
+  -webkit-user-select: none;
+}
+/* 입력칸은 예외 — 지우고 다시 쓰려면 잡을 수 있어야 한다. */
+input,
+textarea {
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+.mono {
+  font-family: ui-monospace, "Cascadia Mono", "Consolas", monospace;
+}
+
+/* 화면 밖으로 넘치지 않는다 — 스크롤은 각 열이 따로 한다. */
+.app {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.top {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  height: 44px;
+  padding: 0 14px;
+  border-bottom: 1px solid var(--line);
+  background: var(--raised);
+  flex: none;
+}
+.top h1 {
+  font-size: 13px;
+  font-weight: 600;
+  margin: 0;
+}
+.where {
+  font-size: 11.5px;
+  color: var(--faint);
+}
+.where i {
+  font-style: normal;
+  color: #3f3f46;
+}
+.spacer {
+  flex-grow: 1;
+}
+.who {
+  font-size: 11px;
+  color: var(--dim);
+}
+
+/*
+ * 세 열 + 손잡이 둘. 너비는 사람이 끌어서 정하고(`useColumnWidths`) 가운데가 남는 자리를
+ * 먹는다 — 고정폭이 깨진 이유는 화면 크기가 아니라 이름 길이였다.
+ */
+.cols {
+  display: grid;
+  grid-template-columns: var(--col-left, 320px) 5px minmax(0, 1fr) 5px var(
+      --col-right,
+      380px
+    );
+  flex-grow: 1;
+  min-height: 0;
+}
+
+.splitter {
+  cursor: col-resize;
+  background: var(--line);
+  /* 5px 은 잡기엔 좁다 — 실제 히트 영역만 좌우로 넓힌다(레이아웃은 그대로). */
+  position: relative;
+}
+.splitter::after {
+  content: "";
+  position: absolute;
+  inset: 0 -4px;
+}
+.splitter:hover,
+.splitter:active,
+.splitter:focus-visible {
+  background: var(--accent-line);
+  outline: none;
+}
+
+.pane {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--bg);
+  border-right: 1px solid var(--line);
+}
+.pane:last-child {
+  border-right: none;
+  background: var(--panel);
+}
+
+.pane-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 34px;
+  padding: 0 12px;
+  border-bottom: 1px solid var(--line);
+  background: var(--raised);
+  flex: none;
+}
+.pane-title {
+  font-size: 10.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin: 0;
+  font-weight: 600;
+}
+.pane-count {
+  font-size: 11.5px;
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+  font-family: ui-monospace, "Cascadia Mono", "Consolas", monospace;
+}
+.pane-total {
+  font-size: 11px;
+  color: var(--dim);
+}
+.pane-note {
+  font-size: 11px;
+  color: var(--faint);
+  line-height: 1.5;
+  margin: 0;
+  padding: 8px 14px;
+  border-top: 1px solid var(--line);
+  flex: none;
+}
+
+/* ── 입력 ─────────────────────────────────────────────────────── */
+button {
+  padding: 3px 8px;
+  font: inherit;
+  font-size: 11.5px;
+  border-radius: 5px;
+  border: 1px solid var(--line);
+  background: var(--bg);
+  color: var(--fg);
+  cursor: pointer;
+  white-space: nowrap;
+}
+button:hover:not(:disabled) {
+  border-color: #52525b;
+}
+button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+button.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--on-accent);
+  font-size: 12.5px;
+  font-weight: 600;
+  padding: 8px 16px;
+  border-radius: 6px;
+}
+button.primary:hover:not(:disabled) {
+  border-color: var(--accent);
+}
+
+input,
+select {
+  padding: 6px 9px;
+  font: inherit;
+  font-size: 12.5px;
+  border-radius: 6px;
+  border: 1px solid var(--line);
+  background: var(--sunken);
+  color: var(--fg);
+}
+input::placeholder {
+  color: var(--dim);
+}
+input:focus-visible,
+select:focus-visible,
+button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+input[type="checkbox"],
+input[type="radio"] {
+  padding: 0;
+  accent-color: var(--accent);
+}
+
+.search {
+  margin: 8px 10px 0;
+  flex: none;
+}
+.search input {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/* 눌린 상태가 분명해야 하는 두 축 — 탭이 아니라 세그먼트. */
+.modes {
+  display: flex;
+  gap: 3px;
+  padding: 2px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+}
+.mode {
+  border: none;
+  border-radius: 4px;
+  padding: 3px 10px;
+  font-size: 11.5px;
+  color: var(--muted);
+  background: transparent;
+}
+.mode:hover:not(.is-on) {
+  background: #2a2a30;
+  border-color: transparent;
+}
+.mode.is-on {
+  background: var(--accent);
+  color: var(--on-accent);
+  font-weight: 600;
+}
+
+/* ── 아직 없는 기능의 자리 ────────────────────────────────────── */
+.tiers {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.tiers span {
+  padding: 3px 8px;
+  border-radius: 5px;
+  border: 1px solid var(--line);
+  font-size: 11px;
+  color: var(--faint);
+}
+.tiers b {
+  font-family: ui-monospace, "Cascadia Mono", "Consolas", monospace;
+  font-weight: 600;
+  color: var(--dim);
+}
+
+/*
+ * 칩은 **줄바꿈한다.** 열 너비를 사람이 줄일 수 있게 되면서 한 줄에 다 못 들어가는 것이
+ * 정상 상태가 됐다 — 안 접으면 마지막 칩이 세로로 뭉개진다(실측).
+ */
+.chips {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 5px;
+  padding: 8px 10px;
+  flex: none;
+}
+.chip {
+  white-space: nowrap;
+  flex: none;
+}
+.chip {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 99px;
+  border: 1px solid var(--line);
+  color: var(--muted);
+  background: var(--bg);
+}
+.chip.is-on {
+  border-color: var(--accent-line);
+  background: var(--accent-bg);
+  color: #cbd5e1;
+}
+/* 칩이 버튼이어도 모양은 같다 — 필터로 동작하는 칩. */
+button.chip {
+  font: inherit;
+  font-size: 11px;
+  padding: 2px 8px;
+  cursor: pointer;
+}
+.chip.is-accent {
+  border-color: var(--accent-line);
+  color: var(--accent);
+}
+
+/* ── 대상 트리 ────────────────────────────────────────────────── */
+.tree {
+  flex-grow: 1;
+  min-height: 0;
+  overflow-y: auto;
+  border-top: 1px solid var(--line-soft);
+}
+.group-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 12px;
+  font-size: 12.5px;
+  font-weight: 600;
+  background: #1c1c20;
+  border-top: 1px solid var(--line-soft);
+  border-bottom: 1px solid var(--line-soft);
+  position: sticky;
+  top: 0;
+}
+.group-name {
+  flex-grow: 1;
+  cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.count {
+  font-size: 10.5px;
+  color: var(--faint);
+  font-variant-numeric: tabular-nums;
+  font-family: ui-monospace, "Cascadia Mono", "Consolas", monospace;
+}
+.caret-btn {
+  border: none;
+  background: transparent;
+  padding: 0;
+  width: 10px;
+  color: var(--faint);
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+}
+.kiosk {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 12px 3px 30px;
+  font-size: 12.5px;
+  cursor: pointer;
+}
+.kiosk:hover {
+  background: var(--raised);
+}
+.kiosk span {
+  flex-grow: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.kiosk.off {
+  color: var(--faint);
+}
+/* 티어는 아직 값이 없다 — 자리만 잡아둔 배지. */
+.tier {
+  font-style: normal;
+  font-size: 9.5px;
+  letter-spacing: 0.04em;
+  padding: 0 5px;
+  border-radius: 3px;
+  border: 1px dashed #3f3f46;
+  color: var(--faint);
+  flex: none;
+}
+.dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 99px;
+  flex: none;
+  background: #3f3f46;
+}
+.dot.connected {
+  background: var(--ok);
+}
+
+.foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 12px;
+  border-top: 1px solid var(--line);
+  flex: none;
+}
+.foot span {
+  flex-grow: 1;
+  font-size: 11px;
+  color: var(--faint);
+}
+
+/* ── 조합 (컴포넌트 · 버전) ───────────────────────────────────── */
+.picker-tools {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  border-bottom: 1px solid var(--line-soft);
+  flex: none;
+}
+/* 컴포넌트가 스물까지 늘어도 열 머리와 인스펙터는 붙어 있어야 한다. */
+.picker-head,
+.component-head {
+  display: grid;
+  grid-template-columns: 14px 178px minmax(0, 1fr) 82px 68px 18px;
+  align-items: center;
+  gap: 10px;
+}
+.picker-head {
+  padding: 6px 14px;
+  border-bottom: 1px solid var(--line);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--dim);
+  flex: none;
+}
+.picker-head .num {
+  text-align: right;
+}
+.picker {
+  flex-grow: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+.component-head {
+  width: 100%;
+  box-sizing: border-box;
+  cursor: pointer;
+  padding: 6px 14px;
+  border: none;
+  border-bottom: 1px solid var(--line-soft);
+  border-radius: 0;
+  background: transparent;
+  text-align: left;
+  font-size: 12.5px;
+}
+.component-head:hover {
+  background: var(--raised);
+  border-color: transparent;
+  border-bottom: 1px solid var(--line-soft);
+}
+.component.is-open .component-head {
+  background: var(--accent-bg);
+}
+.component-head .name {
+  font-family: ui-monospace, "Cascadia Mono", "Consolas", monospace;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.desc {
+  font-size: 11.5px;
+  color: var(--faint);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/*
+ * 설명이 실제로 있는 행만 밝다.
+ *
+ * 목록을 훑을 때 먼저 보여야 하는 것은 문구가 아니라 **적혀 있다는 사실**이다. 없는 행의
+ * "설명 없음"과 같은 색이면 둘이 한 덩어리로 뭉개져, 있는 줄을 찾으려면 한 줄씩 읽어야 한다.
+ */
+.desc.is-set {
+  color: var(--fg);
+}
+.when {
+  font-family: ui-monospace, "Cascadia Mono", "Consolas", monospace;
+  font-size: 10.5px;
+  color: var(--faint);
+}
+.version-item:hover {
+  background: var(--raised) !important;
+}
+.surface {
+  font-family: ui-monospace, "Cascadia Mono", "Consolas", monospace;
+  font-size: 10.5px;
+  color: var(--faint);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.chosen {
+  font-family: ui-monospace, "Cascadia Mono", "Consolas", monospace;
+  font-size: 12px;
+  color: var(--accent);
+  text-align: right;
+}
+.unchosen {
+  font-size: 11px;
+  color: var(--dim);
+  text-align: right;
+}
+
+/* 표에서는 설명을 한 줄로 묶고, 전문은 확대해서 본다. */
+.zoom {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border-radius: 4px;
+  border: 1px solid var(--line);
+  color: var(--faint);
+  background: transparent;
+}
+.zoom:hover {
+  color: var(--accent);
+  border-color: var(--accent-line);
+}
+
+.versions {
+  background: var(--sunken);
+  border-bottom: 1px solid var(--line-soft);
+  padding: 4px 14px 8px 38px;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.version {
+  display: grid;
+  grid-template-columns: 14px 88px 80px 118px minmax(0, 1fr) 18px;
+  align-items: center;
+  gap: 10px;
+  padding: 5px 8px;
+  border-radius: 5px;
+  cursor: pointer;
+}
+.version:hover {
+  background: var(--raised);
+}
+.version.is-chosen {
+  background: var(--accent-bg);
+}
+.version .v {
+  font-family: ui-monospace, "Cascadia Mono", "Consolas", monospace;
+  font-size: 12px;
+}
+.version.is-chosen .v {
+  font-weight: 600;
+}
+.version.is-chosen .surface {
+  color: var(--accent);
+}
+.versions .actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 5px;
+}
+
+/* ── 인스펙터 (고른 버전) ─────────────────────────────────────── */
+.inspector {
+  border-top: 1px solid var(--line);
+  background: var(--panel);
+  flex: none;
+}
+.inspector-head {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 7px 14px;
+  border-bottom: 1px solid var(--line-soft);
+}
+.inspector-head .what {
+  font-family: ui-monospace, "Cascadia Mono", "Consolas", monospace;
+  font-size: 12px;
+  color: var(--fg);
+}
+.inspector-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 200px;
+  gap: 16px;
+  padding: 10px 14px 12px;
+}
+/*
+ * 88px(=4줄)이던 것을 늘렸다. 릴리스 워크플로에 변경 요약 입력이 붙으면서 여러 줄이
+ * 정상 입력이 됐고, 넘치는 분량은 아래 페이드가 알린다.
+ */
+.desc-box {
+  position: relative;
+  min-width: 0;
+}
+.inspector-body .desc-box p {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.7;
+  color: var(--muted);
+  max-height: 140px;
+  overflow-y: auto;
+  white-space: pre-line;
+}
+/* 넘칠 때만 켜진다(`DescriptionBox` 가 재서 붙인다) — 항상 걸면 멀쩡한 마지막 줄이 흐려진다. */
+.desc-box.is-more::after {
+  content: "";
+  position: absolute;
+  inset: auto 0 0 0;
+  height: 28px;
+  pointer-events: none;
+  background: linear-gradient(transparent, var(--bg));
+}
+.meta {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-family: ui-monospace, "Cascadia Mono", "Consolas", monospace;
+  font-size: 10.5px;
+  color: var(--faint);
+}
+.meta b {
+  font-weight: 400;
+  color: var(--muted);
+}
+
+/* ── 보내기 ───────────────────────────────────────────────────── */
+.send {
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  flex: none;
+}
+.manifest {
+  font-family: ui-monospace, "Cascadia Mono", "Consolas", monospace;
+  font-size: 11.5px;
+  line-height: 1.75;
+  color: var(--muted);
+  background: var(--sunken);
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  padding: 10px 12px;
+  max-height: 122px;
+  overflow-y: auto;
+}
+.manifest .title {
+  color: var(--dim);
+}
+.manifest b {
+  font-weight: 400;
+  color: var(--fg);
+}
+.send-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.send-bar span {
+  font-size: 12px;
+  color: var(--muted);
+}
+.send-bar b {
+  color: var(--fg);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── 롤백 — 버전을 고르지 않는 별도 경로. 항상 떠 있고 확인을 거친다 ── */
+.rollback {
+  border-top: 1px dashed var(--line);
+  padding-top: 10px;
+}
+.rollback .send-bar .note {
+  font-size: 11.5px;
+}
+button.danger {
+  border-color: color-mix(in srgb, var(--bad, #dc2626) 55%, var(--line));
+  color: var(--bad, #dc2626);
+}
+button.danger:hover:not(:disabled) {
+  border-color: var(--bad, #dc2626);
+}
+button.primary.danger {
+  background: var(--bad, #dc2626);
+  border-color: var(--bad, #dc2626);
+  color: #fff;
+}
+.confirm {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid color-mix(in srgb, var(--bad, #dc2626) 45%, var(--line));
+  border-radius: 7px;
+  background: var(--sunken);
+}
+.confirm-head {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.confirm-head b {
+  font-size: 12.5px;
+  color: var(--fg);
+}
+.confirm-head .note {
+  font-size: 11.5px;
+  line-height: 1.5;
+}
+.confirm.is-danger {
+  border-color: color-mix(in srgb, var(--bad) 45%, var(--line));
+}
+.block {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.section-title {
+  font-size: 10.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--dim);
+  font-weight: 600;
+}
+.rows {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 140px;
+  overflow-y: auto;
+  font-size: 12px;
+}
+.rows.mono {
+  font-size: 11.5px;
+}
+.rows > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  color: var(--muted);
+}
+.rows b {
+  color: var(--fg);
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+}
+.send-error {
+  margin: 0;
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--line);
+}
+button.link {
+  border: none;
+  background: transparent;
+  padding: 0;
+  font-size: 11.5px;
+  color: var(--faint);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+button.link:hover:not(:disabled) {
+  color: var(--muted);
+}
+.danger-text {
+  color: var(--bad);
+}
+.big {
+  font-size: 22px;
+  font-weight: 600;
+  color: var(--fg);
+  font-variant-numeric: tabular-nums;
+}
+input.is-locked {
+  border-color: color-mix(in srgb, var(--bad) 45%, var(--line));
+}
+
+/* ── 결과 ─────────────────────────────────────────────────────── */
+.tally {
+  font-size: 11px;
+  color: var(--faint);
+}
+.tally.ok {
+  color: var(--ok);
+}
+.tally.bad {
+  color: var(--bad);
+}
+
+.progress {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 9px 14px;
+  border-bottom: 1px solid var(--line-soft);
+  flex: none;
+}
+.progress-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  color: var(--faint);
+}
+.progress-line span {
+  flex-grow: 1;
+}
+.progress-line b {
+  font-family: ui-monospace, "Cascadia Mono", "Consolas", monospace;
+  font-weight: 400;
+  color: var(--muted);
+}
+.track {
+  height: 4px;
+  border-radius: 99px;
+  background: #26262b;
+  overflow: hidden;
+  display: flex;
+}
+.track .fill-ok {
+  background: var(--ok);
+}
+.track .fill-bad {
+  background: var(--bad);
+}
+
+.result-tools {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 14px;
+  border-bottom: 1px solid var(--line-soft);
+  flex: none;
+}
+.inline {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  color: var(--muted);
+  flex-grow: 1;
+  cursor: pointer;
+}
+
+.results {
+  flex-grow: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+/* 수백 대의 결과는 업장 단위로 접어 본다 — 실패가 있는 곳이 위로 온다. */
+.result-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 14px;
+  background: #1c1c20;
+  border-top: 1px solid var(--line-soft);
+  border-bottom: 1px solid var(--line-soft);
+  font-size: 12px;
+  font-weight: 600;
+}
+.result-group span {
+  flex-grow: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.result {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 62px;
+  grid-template-areas: "name status" "error error";
+  gap: 4px 8px;
+  align-items: center;
+  padding: 7px 14px;
+  font-size: 12.5px;
+  color: var(--muted);
+}
+.result .who {
+  grid-area: name;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.result em {
+  grid-area: status;
+  font-style: normal;
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  text-align: center;
+  padding: 1px 0;
+  border-radius: 99px;
+  border: 1px solid var(--line);
+  color: var(--faint);
+}
+.result code {
+  grid-area: error;
+  font-family: ui-monospace, "Cascadia Mono", "Consolas", monospace;
+  font-size: 10.5px;
+  color: var(--bad);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.result.ok em {
+  color: var(--ok);
+  border-color: var(--ok-line);
+}
+.result.sending em {
+  color: var(--accent);
+  border-color: var(--accent-line);
+}
+.result.failed {
+  background: var(--bad-bg);
+  color: var(--fg);
+}
+.result.failed em {
+  color: var(--bad);
+  border-color: var(--bad-line);
+}
+.result.pending em {
+  opacity: 0.5;
+}
+
+/* ── 확대 보기 ────────────────────────────────────────────────── */
+.backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.62);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px;
+  z-index: 10;
+}
+.detail {
+  width: min(960px, 100%);
+  height: min(600px, 100%);
+  display: flex;
+  flex-direction: column;
+  background: var(--panel);
+  border: 1px solid #3a3a42;
+  border-radius: 12px;
+  box-shadow: 0 24px 60px -20px rgba(0, 0, 0, 0.75);
+  overflow: hidden;
+}
+.detail-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 16px;
+  height: 48px;
+  border-bottom: 1px solid var(--line);
+  background: #232329;
+  flex: none;
+}
+.detail-head .what {
+  font-family: ui-monospace, "Cascadia Mono", "Consolas", monospace;
+  font-size: 13.5px;
+  font-weight: 600;
+}
+.detail-head .v {
+  font-family: ui-monospace, "Cascadia Mono", "Consolas", monospace;
+  font-size: 13px;
+  color: var(--accent);
+}
+.detail-body {
+  flex-grow: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 18px 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.detail-body h3 {
+  margin: 0;
+  font-size: 10.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--faint);
+  font-weight: 600;
+}
+.detail-body p {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.85;
+  color: #d4d4d8;
+  white-space: pre-line;
+}
+.detail-meta {
+  display: grid;
+  grid-template-columns: 92px minmax(0, 1fr);
+  gap: 7px 14px;
+  font-family: ui-monospace, "Cascadia Mono", "Consolas", monospace;
+  font-size: 11.5px;
+  color: var(--faint);
+  background: var(--sunken);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 12px 14px;
+}
+.detail-meta b {
+  font-weight: 400;
+  color: #d4d4d8;
+  overflow-wrap: anywhere;
+}
+.detail-foot {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 22px;
+  border-top: 1px solid var(--line);
+  background: #161619;
+  flex: none;
+}
+
+/* ── 로그인 ───────────────────────────────────────────────────── */
+.login {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+}
+.login h1 {
+  font-size: 15px;
+  font-weight: 600;
+  margin: 0;
+}
+.login form {
+  width: 300px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--raised);
+}
+.login label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 11.5px;
+  color: var(--muted);
+}
+.login button {
+  padding: 8px 12px;
+  font-size: 12.5px;
+  font-weight: 600;
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--on-accent);
+}
+.note {
+  font-size: 11.5px;
+  color: var(--faint);
+  line-height: 1.55;
+  margin: 0;
+}
+.error {
+  color: var(--bad);
+  font-size: 11.5px;
+  margin: 0;
+}
+
+/* ── 대상 행의 상태 배지 ──────────────────────────────────────── */
+/*
+ * 실패만 빨강이다. 미적용(오래 SENT)·미보고는 나쁜 소식이 아니라 "아직/모른다"라
+ * 회색조로 두고, 뜻은 색이 아니라 모양(✕ / … / ?)이 진다.
+ */
+.mark {
+  font-style: normal;
+  font-size: 10px;
+  padding: 0 3px;
+  border-radius: 3px;
+  color: var(--faint);
+  background: var(--sunken);
+  flex: none;
+}
+.mark.bad {
+  color: var(--bad);
+  background: var(--bad-bg);
+}
+.mark.faint {
+  color: var(--dim);
+}
+
+/* 값이 붙은 티어 배지는 실선 — 점선은 계속 "아직 없음"의 표시로 남긴다. */
+.tier.is-on {
+  border-style: solid;
+  border-color: var(--line);
+  color: var(--muted);
+}
+
+/* 손댈 곳이 있는 칩. 0 이면 강조가 꺼진다. */
+.chip.is-bad {
+  border-color: var(--bad-line);
+  color: var(--bad);
+}
+
+/* ── 버전 현황 판 ─────────────────────────────────────────────── */
+/*
+ * 비교는 같은 열을 세로로 훑을 때 성립하므로 표다. 컴포넌트가 아홉이라 가로 스크롤은
+ * 피할 수 없고, 대신 키오스크 이름 열과 머리줄을 붙여 무엇을 보는지 잃지 않게 한다.
+ */
+.detail.matrix {
+  width: min(1360px, 100%);
+  height: min(720px, 100%);
+}
+/* 표는 max-content 로 넓어져야 한다 — flex 아이템이면 부모 폭으로 늘어나 버린다. */
+.matrix-body {
+  display: block;
+  overflow: auto;
+  padding: 0;
+}
+.matrix-table {
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 11.5px;
+  width: max-content;
+  min-width: 100%;
+}
+.matrix-table th,
+.matrix-table td {
+  padding: 4px 9px;
+  border-bottom: 1px solid var(--line-soft);
+  border-right: 1px solid var(--line-soft);
+  text-align: left;
+  white-space: nowrap;
+}
+.matrix-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: #1c1c20;
+  color: var(--muted);
+  font-weight: 600;
+}
+.matrix-table .stick {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  background: var(--panel);
+  display: table-cell;
+}
+.matrix-table thead .stick {
+  z-index: 3;
+  background: #1c1c20;
+}
+.matrix-table tbody tr:hover td,
+.matrix-table tbody tr:hover .stick {
+  background: var(--raised);
+}
+.matrix-table .stick .who {
+  display: block;
+  font-weight: 600;
+  color: var(--fg);
+}
+.matrix-table .stick .sub {
+  display: block;
+  font-size: 10px;
+  font-weight: 400;
+  color: var(--faint);
+}
+.matrix-table .cell {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: var(--muted);
+}
+.matrix-table .cell.ok {
+  color: var(--ok);
+}
+.matrix-table .cell.bad {
+  color: var(--bad);
+  background: var(--bad-bg);
+}
+/* 결론이 없는 것은 실패가 아니다 — 색이 아니라 흐림으로 가른다. */
+.matrix-table .cell.wait {
+  color: var(--fg);
+  background: var(--sunken);
+}
+.matrix-table .cell.none,
+.matrix-table .none-text {
+  color: var(--dim);
+}
+/* 아직 안 끝난 지시의 목적지 — 실재 옆에 얹는다. 두 축을 나란히 두면 표가 두 배가 된다. */
+.matrix-table .target {
+  color: var(--accent);
+}
+
+.detail-foot .legend {
+  font-size: 11px;
+  color: var(--faint);
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.detail-foot .legend::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-radius: 2px;
+  background: currentColor;
+}
+.detail-foot .legend.ok {
+  color: var(--ok);
+}
+.detail-foot .legend.bad {
+  color: var(--bad);
+}
+.detail-foot .legend.wait {
+  color: var(--fg);
+}
+.detail-foot .legend.none {
+  color: var(--dim);
+}
+.detail-foot .legend.none::before {
+  display: none;
+}
+
+/* ── 배포 이력 ────────────────────────────────────────────────── */
+/*
+ * 발송 한 건이 한 줄이고, 궁금할 때만 편다. 행을 그대로 늘어놓으면 100대 배포 하나가
+ * 화면을 다 먹는다.
+ */
+.history {
+  display: flex;
+  flex-direction: column;
+}
+.batch {
+  border-bottom: 1px solid var(--line-soft);
+}
+.batch-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 14px;
+  font-size: 12px;
+  cursor: pointer;
+}
+.batch-head:hover {
+  background: var(--raised);
+}
+/* 손댈 것이 남은 발송만 왼쪽에 표시가 선다 — 훑을 때 먼저 보여야 한다. */
+.batch.is-open .batch-head {
+  box-shadow: inset 2px 0 0 var(--bad);
+}
+.batch-head .when {
+  color: var(--faint);
+  flex: none;
+}
+.batch-head .who {
+  color: var(--muted);
+  flex: none;
+}
+.batch-head .what {
+  color: var(--fg);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.batch .matrix-table {
+  width: 100%;
+  border-top: 1px solid var(--line-soft);
+  background: var(--sunken);
+}
+
+/* ── 티어 관리 ────────────────────────────────────────────────── */
+/* 왼쪽에 티어, 오른쪽에 그 속살. 매는 단위는 업장이다. */
+.tier-body {
+  display: grid;
+  grid-template-columns: 200px minmax(0, 1fr);
+  gap: 0;
+  padding: 0;
+  overflow: hidden;
+}
+.tier-list {
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid var(--line);
+  overflow-y: auto;
+  padding: 8px;
+  gap: 4px;
+}
+.tier-item {
+  text-align: left;
+  font: inherit;
+  font-size: 12.5px;
+  padding: 6px 9px;
+  border-radius: 5px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+.tier-item:hover {
+  background: var(--raised);
+}
+.tier-item.is-on {
+  border-color: var(--accent-line);
+  background: var(--accent-bg);
+  color: var(--fg);
+}
+.tier-new {
+  display: flex;
+  gap: 4px;
+  margin-top: auto;
+  padding-top: 8px;
+  border-top: 1px solid var(--line-soft);
+}
+.tier-new input {
+  min-width: 0;
+  flex-grow: 1;
+}
+.tier-detail {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+.tier-name {
+  font-size: 13px;
+  font-weight: 600;
+  min-width: 0;
+  flex-grow: 1;
+  max-width: 280px;
+}
+.tier-cols {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  padding: 14px 18px;
+  min-height: 0;
+  overflow-y: auto;
+}
+.tier-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 0;
+  font-size: 12px;
+}
+.tier-row span {
+  flex-grow: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
