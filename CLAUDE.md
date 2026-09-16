@@ -102,7 +102,7 @@ return <div>{data.accommodation.name}</div>;
 Frontend (React 19 + Vite)
   ↕ Socket.IO (개발) / Electron IPC (프로덕션)
 Backend (Node.js + Socket.IO)
-  ↕ Express-IPC (Named Pipes)
+  ↕ Express-IPC Named Pipe (개발) / Electron utilityProcess postMessage (프로덕션)
 Serialport Subprocess (독립 프로세스)
   ↕ Serial Port
 Hardware Device

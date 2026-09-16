@@ -44,7 +44,7 @@ flowchart TB
   SV["supervisor<br/>Windows 서비스"]
 
   R <-->|"MessagePort<br/>개발에선 Socket.IO — 같은 인터페이스"| B
-  B <-->|"Named Pipe"| D
+  B <-->|"postMessage · utilityProcess<br/>개발에선 express-ipc Named Pipe — 같은 인터페이스"| D
   D <-->|"Serial / FFI"| HW
   SV -.->|"앱이 죽으면 되살린다"| APP
 ```
